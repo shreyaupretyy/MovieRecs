@@ -1,88 +1,228 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext'; // Import the auth context
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { 
+  faFilm, 
+  faEnvelope, 
+  faHome,
+  faPlayCircle,
+  faUserPlus,
+  faSignInAlt,
+  faShield,
+  faFileContract,
+  faQuestion,
+  faUsers,
+  faStar,
+  faChartLine,
+  faUser,
+  faCog,
+  faSignOutAlt
+} from '@fortawesome/free-solid-svg-icons';
+import { 
+  faTwitter, 
+  faFacebook, 
+  faInstagram, 
+  faYoutube 
+} from '@fortawesome/free-brands-svg-icons';
 
 const Footer = () => {
+  const { currentUser } = useAuth(); // Get current user from auth context
   const currentYear = new Date().getFullYear();
   
   return (
-    <footer className="bg-gray-900 text-white">
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row justify-between">
-          {/* Logo and description */}
-          <div className="mb-6 md:mb-0 md:w-1/3">
-            <Link to="/" className="flex items-center mb-4">
-              <span className="text-primary-500 text-xl font-bold">MovieRecs</span>
-            </Link>
-            <p className="text-gray-400 text-sm">
-              Discover your next favorite movie with our personalized recommendation engine. 
-              We analyze your preferences to suggest films you'll love.
+    <footer className="bg-gray-900 text-white mt-12">
+      {/* Main Footer Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {/* Brand Section */}
+          <div>
+            <div className="flex items-center mb-5">
+              <div className="bg-blue-600 p-2 rounded-lg mr-2">
+                <FontAwesomeIcon icon={faFilm} className="text-xl text-white" />
+              </div>
+              <span className="text-xl font-bold text-white">MovieRecs</span>
+            </div>
+            <p className="text-gray-400 mb-5 leading-relaxed">
+              Discover movies tailored to your taste. Rate films and get personalized recommendations powered by our advanced algorithm.
             </p>
+            <div className="flex space-x-4">
+              <a href="#" className="text-gray-400 hover:text-white transition-colors" aria-label="Twitter">
+                <FontAwesomeIcon icon={faTwitter} className="text-lg" />
+              </a>
+              <a href="#" className="text-gray-400 hover:text-white transition-colors" aria-label="Facebook">
+                <FontAwesomeIcon icon={faFacebook} className="text-lg" />
+              </a>
+              <a href="#" className="text-gray-400 hover:text-white transition-colors" aria-label="Instagram">
+                <FontAwesomeIcon icon={faInstagram} className="text-lg" />
+              </a>
+              <a href="#" className="text-gray-400 hover:text-white transition-colors" aria-label="YouTube">
+                <FontAwesomeIcon icon={faYoutube} className="text-lg" />
+              </a>
+            </div>
           </div>
           
-          {/* Navigation */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Navigation</h3>
-              <ul className="space-y-2">
+          {/* Navigation Links */}
+          <div>
+            <h3 className="text-lg font-semibold mb-5 flex items-center">
+              <FontAwesomeIcon icon={faPlayCircle} className="mr-2 text-blue-500" />
+              Navigation
+            </h3>
+            <ul className="space-y-3">
+              <li>
+                <Link to="/" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                  <FontAwesomeIcon icon={faHome} className="mr-2 text-xs text-gray-500" />
+                  <span>Home</span>
+                </Link>
+              </li>
+              <li>
+                <Link to="/movies" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                  <FontAwesomeIcon icon={faFilm} className="mr-2 text-xs text-gray-500" />
+                  <span>Movies</span>
+                </Link>
+              </li>
+              {currentUser && (
+                <>
+                  <li>
+                    <Link to="/rated" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                      <FontAwesomeIcon icon={faStar} className="mr-2 text-xs text-gray-500" />
+                      <span>My Ratings</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/recommended" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                      <FontAwesomeIcon icon={faChartLine} className="mr-2 text-xs text-gray-500" />
+                      <span>Recommendations</span>
+                    </Link>
+                  </li>
+                </>
+              )}
+            </ul>
+          </div>
+          
+          {/* Account Section - Conditionally rendered based on login status */}
+          <div>
+            <h3 className="text-lg font-semibold mb-5 flex items-center">
+              <FontAwesomeIcon icon={faUsers} className="mr-2 text-blue-500" />
+              {currentUser ? 'My Account' : 'Account'}
+            </h3>
+            <ul className="space-y-3">
+              {currentUser ? (
+                // Logged in user account links
+                <>
+                  <li>
+                    <Link to="/profile" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                      <FontAwesomeIcon icon={faUser} className="mr-2 text-xs text-gray-500" />
+                      <span>My Profile</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/settings" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                      <FontAwesomeIcon icon={faCog} className="mr-2 text-xs text-gray-500" />
+                      <span>Account Settings</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/watchlist" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                      <FontAwesomeIcon icon={faStar} className="mr-2 text-xs text-gray-500" />
+                      <span>My Watchlist</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/activity" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                      <FontAwesomeIcon icon={faChartLine} className="mr-2 text-xs text-gray-500" />
+                      <span>Recent Activity</span>
+                    </Link>
+                  </li>
+                </>
+              ) : (
+                // Non-logged in user links
+                <>
+                  <li>
+                    <Link to="/login" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                      <FontAwesomeIcon icon={faSignInAlt} className="mr-2 text-xs text-gray-500" />
+                      <span>Login</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/register" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                      <FontAwesomeIcon icon={faUserPlus} className="mr-2 text-xs text-gray-500" />
+                      <span>Register</span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/forgot-password" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                      <FontAwesomeIcon icon={faQuestion} className="mr-2 text-xs text-gray-500" />
+                      <span>Forgot Password</span>
+                    </Link>
+                  </li>
+                </>
+              )}
+              <li>
+                <Link to="/help" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                  <FontAwesomeIcon icon={faQuestion} className="mr-2 text-xs text-gray-500" />
+                  <span>Help Center</span>
+                </Link>
+              </li>
+            </ul>
+          </div>
+          
+          {/* Legal and Contact */}
+          <div>
+            <h3 className="text-lg font-semibold mb-5 flex items-center">
+              <FontAwesomeIcon icon={faShield} className="mr-2 text-blue-500" />
+              Legal
+            </h3>
+            <ul className="space-y-3 mb-6">
+              <li>
+                <a href="#" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                  <FontAwesomeIcon icon={faShield} className="mr-2 text-xs text-gray-500" />
+                  <span>Privacy Policy</span>
+                </a>
+              </li>
+              <li>
+                <a href="#" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                  <FontAwesomeIcon icon={faFileContract} className="mr-2 text-xs text-gray-500" />
+                  <span>Terms of Service</span>
+                </a>
+              </li>
+              {currentUser && (
                 <li>
-                  <Link to="/" className="text-gray-400 hover:text-white transition duration-200">
-                    Home
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/movies" className="text-gray-400 hover:text-white transition duration-200">
-                    Movies
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/signup" className="text-gray-400 hover:text-white transition duration-200">
-                    Sign Up
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Legal</h3>
-              <ul className="space-y-2">
-                <li>
-                  <Link to="/privacy" className="text-gray-400 hover:text-white transition duration-200">
-                    Privacy Policy
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/terms" className="text-gray-400 hover:text-white transition duration-200">
-                    Terms of Service
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">Contact</h3>
-              <ul className="space-y-2">
-                <li>
-                  <a href="mailto:support@movierecs.com" className="text-gray-400 hover:text-white transition duration-200">
-                    support@movierecs.com
+                  <a href="#" className="text-gray-400 hover:text-white transition-colors flex items-center">
+                    <FontAwesomeIcon icon={faShield} className="mr-2 text-xs text-gray-500" />
+                    <span>Data Policy</span>
                   </a>
                 </li>
-                <li>
-                  <a href="https://github.com/yourusername/movie-recommender" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white transition duration-200">
-                    GitHub
-                  </a>
-                </li>
-              </ul>
-            </div>
+              )}
+            </ul>
+            
+            <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
+            <a 
+              href="mailto:contact@movierecs.com" 
+              className="text-gray-400 hover:text-white transition-colors flex items-center"
+            >
+              <FontAwesomeIcon icon={faEnvelope} className="mr-2 text-blue-500" />
+              <span>contact@movierecs.com</span>
+            </a>
           </div>
         </div>
-        
-        <div className="mt-8 border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
-          <p className="text-gray-400 text-sm">
-            &copy; {currentYear} MovieRecs. All rights reserved.
-          </p>
-          <p className="text-gray-400 text-sm mt-2 md:mt-0">
-            Movie data provided by <a href="http://www.omdbapi.com/" target="_blank" rel="noopener noreferrer" className="text-primary-500 hover:text-primary-400">OMDb API</a>
-          </p>
+      </div>
+      
+      
+      
+      {/* Copyright Bar */}
+      <div className="border-t border-gray-800 pt-8 pb-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="text-gray-500 text-sm mb-2 md:mb-0">
+              &copy; {currentYear} MovieRecs. All rights reserved.
+            </div>
+            <div className="flex space-x-6">
+              <a href="#" className="text-gray-500 hover:text-gray-300 text-sm">Cookies</a>
+              <a href="#" className="text-gray-500 hover:text-gray-300 text-sm">Legal</a>
+              <a href="#" className="text-gray-500 hover:text-gray-300 text-sm">Sitemap</a>
+            </div>
+          </div>
         </div>
       </div>
     </footer>

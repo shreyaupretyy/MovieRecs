@@ -1,178 +1,232 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-
-// Components
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import MovieCard from '../components/MovieCard';
-import LoadingSpinner from '../components/LoadingSpinner';
 import Pagination from '../components/Pagination';
-import SearchFilter from '../components/SearchFilter';
+import GenreFilter from '../components/GenreFilter';
+import { movies } from '../services/api';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faFilter, faSortAmountDown } from '@fortawesome/free-solid-svg-icons';
 
 const MoviesPage = () => {
-  const [movies, setMovies] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const page = parseInt(searchParams.get('page') || '1');
+  const genre = searchParams.get('genre') || '';
+  const sortBy = searchParams.get('sort') || 'vote_average';
+  const order = searchParams.get('order') || 'desc';
+  
+  const [moviesList, setMoviesList] = useState([]);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0
+  });
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalMovies, setTotalMovies] = useState(0);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGenre, setSelectedGenre] = useState('');
-  const [searching, setSearching] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   
-  const moviesPerPage = 20;
-  
-  // List of genres (we'll extract these from the API data later)
-  const genres = [
-    'Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 
-    'Documentary', 'Drama', 'Family', 'Fantasy', 'History',
-    'Horror', 'Music', 'Mystery', 'Romance', 'Science Fiction',
-    'TV Movie', 'Thriller', 'War', 'Western'
+  const sortOptions = [
+    { value: 'popularity', label: 'Popularity' },
+    { value: 'release_date', label: 'Release Date' },
+    { value: 'title', label: 'Title' },
+    { value: 'vote_average', label: 'Rating' }
   ];
-
+  
   useEffect(() => {
     fetchMovies();
-  }, [currentPage]);
-
+  }, [page, genre, sortBy, order]);
+  
   const fetchMovies = async () => {
     try {
-      setLoading(true);
-      const offset = (currentPage - 1) * moviesPerPage;
+      setIsLoading(true);
+      setError(null);
       
-      let response;
-      if (searchQuery.trim() || selectedGenre) {
-        // Search API call
-        response = await axios.get('http://localhost:5000/api/movies/search', {
-          params: {
-            query: searchQuery.trim(),
-            genre: selectedGenre
-          }
-        });
-        
-        setMovies(response.data.movies);
-        setTotalMovies(response.data.count);
-      } else {
-        // Regular paginated API call
-        response = await axios.get('http://localhost:5000/api/movies', {
-          params: {
-            limit: moviesPerPage,
-            offset: offset
-          }
-        });
-        
-        setMovies(response.data.movies);
-        setTotalMovies(response.data.total);
-      }
+      // Use the updated search method with all parameters
+      const response = await movies.search('', genre, page, 20, sortBy, order);
       
-      setLoading(false);
-      setSearching(false);
+      setMoviesList(response.data.movies);
+      setPagination({
+        currentPage: response.data.current_page,
+        totalPages: response.data.pages,
+        totalItems: response.data.total
+      });
     } catch (err) {
       console.error('Error fetching movies:', err);
       setError('Failed to load movies. Please try again later.');
-      setLoading(false);
-      setSearching(false);
+    } finally {
+      setIsLoading(false);
     }
   };
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setSearching(true);
-    setCurrentPage(1);
-    fetchMovies();
+  
+  const handlePageChange = (newPage) => {
+    setSearchParams({ 
+      page: newPage.toString(), 
+      genre, 
+      sort: sortBy, 
+      order 
+    });
+    
+    // Scroll to top of the page
+    window.scrollTo(0, 0);
   };
-
-  const handleClearSearch = () => {
-    setSearchQuery('');
-    setSelectedGenre('');
-    setCurrentPage(1);
-    fetchMovies();
+  
+  const handleGenreSelect = (selectedGenre) => {
+    setSearchParams({ 
+      page: '1',  // Reset to first page when changing genre
+      genre: selectedGenre,
+      sort: sortBy,
+      order
+    });
   };
-
-  const handleGenreChange = (genre) => {
-    setSelectedGenre(genre);
-    setCurrentPage(1);
-    setSearching(true);
-    setTimeout(() => {
-      fetchMovies();
-    }, 100);
+  
+  const handleSortChange = (e) => {
+    setSearchParams({ 
+      page: '1',  // Reset to first page when changing sort
+      genre,
+      sort: e.target.value,
+      order
+    });
   };
-
-  const totalPages = Math.ceil(totalMovies / moviesPerPage);
-
-  if (loading && !searching) {
-    return <LoadingSpinner />;
-  }
-
-  if (error && !searching) {
-    return (
-      <div className="container mx-auto px-4 py-16">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          <p>{error}</p>
-          <button 
-            className="mt-2 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-            onClick={() => fetchMovies()}
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+  
+  const handleOrderToggle = () => {
+    setSearchParams({
+      page: '1',  // Reset to first page when changing order
+      genre,
+      sort: sortBy,
+      order: order === 'asc' ? 'desc' : 'asc'
+    });
+  };
+  
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="container mx-auto px-4">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Discover Movies</h1>
-        
-        {/* Search and Filter Section */}
-        <SearchFilter 
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          selectedGenre={selectedGenre}
-          genres={genres}
-          handleSearch={handleSearch}
-          handleGenreChange={handleGenreChange}
-          handleClearSearch={handleClearSearch}
-        />
-        
-        {/* Results Section */}
-        <div className="mt-8">
-          {searching ? (
-            <div className="flex justify-center my-12">
-              <LoadingSpinner />
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-6">Explore Movies</h1>
+      
+      <div className="md:flex md:items-start">
+        {/* Filters - Desktop */}
+        <div className="hidden md:block md:w-1/4 md:pr-6">
+          <div className="bg-white p-4 rounded-lg shadow-sm">
+            <h2 className="font-bold text-lg mb-4">Filters</h2>
+            <GenreFilter onGenreSelect={handleGenreSelect} selectedGenre={genre} />
+            
+            <div className="mt-6">
+              <h3 className="text-lg font-medium text-gray-800 mb-3">Sort By</h3>
+              <div className="flex flex-col space-y-2">
+                <div className="flex items-center">
+                  <select 
+                    value={sortBy}
+                    onChange={handleSortChange}
+                    className="w-full px-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {sortOptions.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <button
+                  onClick={handleOrderToggle}
+                  className="flex items-center px-3 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-100"
+                >
+                  <FontAwesomeIcon 
+                    icon={faSortAmountDown} 
+                    className={`mr-2 ${order === 'asc' ? 'transform rotate-180' : ''}`}
+                  />
+                  {order === 'asc' ? 'Ascending' : 'Descending'}
+                </button>
+              </div>
             </div>
-          ) : movies.length > 0 ? (
+          </div>
+        </div>
+        
+        {/* Mobile filter toggle */}
+        <div className="md:hidden mb-4">
+          <button 
+            onClick={() => setShowFilters(!showFilters)}
+            className="w-full flex items-center justify-between p-4 bg-white rounded-lg shadow-sm"
+          >
+            <span className="font-medium">Filters & Sort</span>
+            <FontAwesomeIcon icon={faFilter} />
+          </button>
+          
+          {showFilters && (
+            <div className="mt-2 bg-white p-4 rounded-lg shadow-sm">
+              <GenreFilter onGenreSelect={handleGenreSelect} selectedGenre={genre} />
+              
+              <div className="mt-6">
+                <h3 className="text-lg font-medium text-gray-800 mb-3">Sort By</h3>
+                <div className="flex flex-col space-y-2">
+                  <div className="flex items-center">
+                    <select 
+                      value={sortBy}
+                      onChange={handleSortChange}
+                      className="w-full px-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {sortOptions.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <button
+                    onClick={handleOrderToggle}
+                    className="flex items-center px-3 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-100"
+                  >
+                    <FontAwesomeIcon 
+                      icon={faSortAmountDown} 
+                      className={`mr-2 ${order === 'asc' ? 'transform rotate-180' : ''}`}
+                    />
+                    {order === 'asc' ? 'Ascending' : 'Descending'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Results */}
+        <div className="md:w-3/4">
+          {isLoading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          ) : error ? (
+            <div className="bg-red-50 p-4 rounded-lg">
+              <p className="text-red-700">{error}</p>
+            </div>
+          ) : (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                {movies.map(movie => (
-                  <MovieCard key={movie.id} movie={movie} />
-                ))}
+              <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
+                <p className="text-gray-600">
+                  {genre 
+                    ? `Showing ${genre} movies (${pagination.totalItems} results)` 
+                    : `Showing all movies (${pagination.totalItems} results)`
+                  }
+                </p>
               </div>
               
-              {/* Pagination */}
-              {totalPages > 1 && !searchQuery && !selectedGenre && (
-                <div className="mt-12">
-                  <Pagination 
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={setCurrentPage}
-                  />
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                {moviesList && moviesList.length > 0 ? (
+                  moviesList.map(movie => (
+                    <MovieCard key={movie.id} movie={movie} showRating={true} />
+                  ))
+                ) : (
+                  <div className="col-span-3 py-8 text-center text-gray-600">
+                    No movies found matching your filters.
+                  </div>
+                )}
+              </div>
+              
+              {pagination.totalPages > 1 && (
+                <Pagination 
+                  currentPage={pagination.currentPage} 
+                  totalPages={pagination.totalPages} 
+                  onPageChange={handlePageChange} 
+                />
               )}
             </>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-16">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <h3 className="text-xl font-semibold text-gray-700">No movies found</h3>
-              <p className="text-gray-500 mt-2">Try changing your search or filter criteria</p>
-              {(searchQuery || selectedGenre) && (
-                <button 
-                  className="mt-4 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded"
-                  onClick={handleClearSearch}
-                >
-                  Clear Search
-                </button>
-              )}
-            </div>
           )}
         </div>
       </div>
