@@ -15,7 +15,11 @@ const HomePage = () => {
   const [isLoadingPopular, setIsLoadingPopular] = useState(true);
   const [isLoadingRecommended, setIsLoadingRecommended] = useState(false);
   const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  
+  // Separate success messages for each section
+  const [popularSuccessMessage, setPopularSuccessMessage] = useState("");
+  const [recommendedSuccessMessage, setRecommendedSuccessMessage] = useState("");
+  
   const [recommendationMessage, setRecommendationMessage] = useState("");
   
   const { currentUser } = useAuth();
@@ -135,6 +139,44 @@ const HomePage = () => {
     fetchRecommendations();
   }, [currentUser]);
   
+  // Handler for rating changes in the recommended movies section
+  const handleRecommendedRatingChange = (movieId, newRating) => {
+    // Update the local state to show the new rating
+    setRecommendedMovies(currentMovies =>
+      currentMovies.map(m => 
+        m.id === movieId ? { ...m, user_rating: newRating } : m
+      )
+    );
+    
+    // Get the movie title
+    const movieTitle = recommendedMovies.find(m => m.id === movieId)?.title || "movie";
+    
+    // Show success message in the recommended section
+    setRecommendedSuccessMessage(`Rating saved for ${movieTitle}`);
+    
+    // Clear success message after 3 seconds
+    setTimeout(() => setRecommendedSuccessMessage(''), 3000);
+  };
+  
+  // Handler for rating changes in the popular movies section
+  const handlePopularRatingChange = (movieId, newRating) => {
+    // Update the local state to show the new rating
+    setPopularMovies(currentMovies =>
+      currentMovies.map(m => 
+        m.id === movieId ? { ...m, user_rating: newRating } : m
+      )
+    );
+    
+    // Get the movie title
+    const movieTitle = popularMovies.find(m => m.id === movieId)?.title || "movie";
+    
+    // Show success message in the popular movies section
+    setPopularSuccessMessage(`Rating saved for ${movieTitle}`);
+    
+    // Clear success message after 3 seconds
+    setTimeout(() => setPopularSuccessMessage(''), 3000);
+  };
+  
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Hero Section */}
@@ -222,62 +264,109 @@ const HomePage = () => {
       </div>
       
       {/* Recommended Movies Section for logged in users */}
-    {currentUser && (
-      <section className="mb-12">
+      {currentUser && (
+        <section className="mb-12">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">
+              Recommended For You
+            </h2>
+            <Link
+              to="/recommended"
+              className="text-blue-600 hover:text-blue-800"
+            >
+              View all →
+            </Link>
+          </div>
+          
+          {/* Success message for recommended section */}
+          {recommendedSuccessMessage && (
+            <div className="bg-green-50 text-green-800 p-4 rounded-md mb-4 transition-opacity duration-300">
+              {recommendedSuccessMessage}
+            </div>
+          )}
+          
+          {isLoadingRecommended ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          ) : recommendedMovies && recommendedMovies.length > 0 ? (
+            <>
+              {recommendationMessage && (
+                <p className="mb-4 text-gray-600">
+                  {recommendationMessage}
+                </p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {recommendedMovies.slice(0, 4).map((movie) => (
+                  <MovieCard 
+                    key={movie.id} 
+                    movie={movie} 
+                    showRating={true} 
+                    onRatingChange={handleRecommendedRatingChange}
+                  />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="bg-gray-100 p-8 rounded-lg text-center">
+              <p className="text-gray-600 mb-4">
+                Rate some movies to get personalized recommendations!
+              </p>
+              <Link
+                to="/movies"
+                className="inline-block bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Browse Movies
+              </Link>
+            </div>
+          )}
+        </section>
+      )}
+      
+      {/* Popular Movies */}
+      <section>
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">
-            Recommended For You
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-900">Popular Movies</h2>
           <Link
-            to="/recommended"
+            to="/movies?sort=popularity"
             className="text-blue-600 hover:text-blue-800"
           >
             View all →
           </Link>
         </div>
         
-        {isLoadingRecommended ? (
+        {/* Error Messages */}
+        {error && (
+          <div className="bg-red-50 text-red-800 p-4 rounded-md mb-4">
+            {error}
+          </div>
+        )}
+        
+        {/* Success message for popular section */}
+        {popularSuccessMessage && (
+          <div className="bg-green-50 text-green-800 p-4 rounded-md mb-4 transition-opacity duration-300">
+            {popularSuccessMessage}
+          </div>
+        )}
+        
+        {isLoadingPopular ? (
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
-        ) : recommendedMovies && recommendedMovies.length > 0 ? (
-          <>
-            {recommendationMessage && (
-              <p className="mb-4 text-gray-600">
-                {recommendationMessage}
-              </p>
-            )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {recommendedMovies.slice(0, 4).map((movie) => (
-                <MovieCard 
-                  key={movie.id} 
-                  movie={movie} 
-                  showRating={true} 
-                  onRatingChange={(movieId, newRating) => {
-                    // Update the local state to show the new rating
-                    setRecommendedMovies(currentMovies =>
-                      currentMovies.map(m => 
-                        m.id === movieId ? { ...m, user_rating: newRating } : m
-                      )
-                    );
-                    
-                    // Show success message
-                    setSuccessMessage(`Rating saved for ${
-                      recommendedMovies.find(m => m.id === movieId)?.title
-                    }`);
-                    
-                    // Clear success message after 3 seconds
-                    setTimeout(() => setSuccessMessage(''), 3000);
-                  }}
-                />
-              ))}
-            </div>
-          </>
+        ) : popularMovies && popularMovies.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {popularMovies.map((movie) => (
+              <MovieCard 
+                key={movie.id} 
+                movie={movie} 
+                showRating={true} 
+                onRatingChange={handlePopularRatingChange}
+              />
+            ))}
+          </div>
         ) : (
           <div className="bg-gray-100 p-8 rounded-lg text-center">
-            <p className="text-gray-600 mb-4">
-              Rate some movies to get personalized recommendations!
-            </p>
+            <p className="text-gray-600 mb-4">No movies found in the database.</p>
             <Link
               to="/movies"
               className="inline-block bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
@@ -287,75 +376,6 @@ const HomePage = () => {
           </div>
         )}
       </section>
-    )}
-      
-      {/* Popular Movies */}
-      <section>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Popular Movies</h2>
-        <Link
-          to="/movies?sort=popularity"
-          className="text-blue-600 hover:text-blue-800"
-        >
-          View all →
-        </Link>
-      </div>
-      
-      {/* Success or Error Messages */}
-      {successMessage && (
-        <div className="bg-green-50 text-green-800 p-4 rounded-md mb-4">
-          {successMessage}
-        </div>
-      )}
-      
-      {error && (
-        <div className="bg-red-50 text-red-800 p-4 rounded-md mb-4">
-          {error}
-        </div>
-      )}
-      
-      {isLoadingPopular ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      ) : popularMovies && popularMovies.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {popularMovies.map((movie) => (
-            <MovieCard 
-              key={movie.id} 
-              movie={movie} 
-              showRating={true} 
-              onRatingChange={(movieId, newRating) => {
-                // Update the local state to show the new rating
-                setPopularMovies(currentMovies =>
-                  currentMovies.map(m => 
-                    m.id === movieId ? { ...m, user_rating: newRating } : m
-                  )
-                );
-                
-                // Show success message
-                setSuccessMessage(`Rating saved for ${
-                  popularMovies.find(m => m.id === movieId)?.title
-                }`);
-                
-                // Clear success message after 3 seconds
-                setTimeout(() => setSuccessMessage(''), 3000);
-              }}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="bg-gray-100 p-8 rounded-lg text-center">
-          <p className="text-gray-600 mb-4">No movies found in the database.</p>
-          <Link
-            to="/movies"
-            className="inline-block bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Browse Movies
-          </Link>
-        </div>
-      )}
-    </section>
     </div>
   );
 };

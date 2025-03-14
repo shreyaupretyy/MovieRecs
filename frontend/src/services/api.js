@@ -113,19 +113,34 @@ export const movies = {
     return api.get(`/movies/${id}`);
   },
   
-  // Updated search method that correctly handles both query and genre filters
-  search: (query = '', genre = '', page = 1, perPage = 20, sortBy = 'popularity', order = 'desc') => {
+  // Updated search method that handles both query, genre, and title_only parameters
+  search: (query = '', genre = '', page = 1, perPage = 20, sortBy = 'popularity', order = 'desc', options = '') => {
     // Build params object
     const params = {
       page,
-      per_page: perPage,
-      sort_by: sortBy,
-      order
+      per_page: perPage
     };
+    
+    // Add sort parameters if provided
+    if (sortBy) params.sort_by = sortBy;
+    if (order) params.order = order;
     
     // Add query and genre if they exist
     if (query) params.search = query;
     if (genre) params.genre = genre;
+    
+    // Check if title_only parameter should be added
+    // This can come from a string parameter or an object with title_only property
+    if (options) {
+      if (typeof options === 'string' && options.includes('title_only=true')) {
+        params.title_only = true;
+      } else if (typeof options === 'object' && options.title_only) {
+        params.title_only = true;
+      }
+    }
+    
+    // Log the search parameters for debugging
+    console.log('Movie search params:', params);
     
     // Use the main /movies endpoint with all filters
     return api.get('/movies', { params });
@@ -145,18 +160,17 @@ export const movies = {
 
 // Rating Services
 export const ratings = {
-  add: (movieId, ratingValue, review = '') => {
-    console.log(`Adding rating ${ratingValue} for movie ${movieId}`);
-    return api.post('/ratings', { 
-      movie_id: movieId, 
-      rating: ratingValue,
-      review: review 
-    });
+  get: (movieId) => {
+    console.log(`Fetching rating for movie ${movieId}`);
+    return api.get(`/ratings/${movieId}`);
   },
   
-  get: (movieId) => {
-    console.log(`Getting rating for movie ${movieId}`);
-    return api.get(`/ratings/${movieId}`);
+  add: (movieId, ratingValue, review = '') => {
+    console.log(`Adding rating ${ratingValue} for movie ${movieId}`);
+    return api.post(`/ratings/${movieId}`, {
+      rating: ratingValue,
+      review: review
+    });
   },
   
   delete: (movieId) => {
@@ -175,7 +189,7 @@ export const ratings = {
     })
 };
 
-// Watchlist Services - Added by shreyaupretyy on 2025-03-14 14:33:18
+// Watchlist Services
 export const watchlist = {
   // Get user's watchlist with pagination
   getWatchlist: (page = 1, perPage = 12) => {
@@ -214,8 +228,36 @@ export const watchlist = {
 };
 
 // Recommendation Services
+// Recommendation Services
 export const recommendations = {
-  getRecommendations: (count = 10) => api.get(`/recommendations?count=${count}`)
+  getRecommendations: (count = 10, refresh = false) => {
+    console.log(`Getting recommendations with count=${count} and refresh=${refresh}`);
+    
+    // Create URL parameters
+    const params = new URLSearchParams();
+    params.append('count', count);
+    
+    if (refresh) {
+      params.append('refresh', 'true');
+      // Add a random value to bust any caching
+      params.append('nocache', Math.random().toString(36).substring(2, 15));
+    }
+    
+    // Log the request URL for debugging
+    console.log(`Sending recommendations request with params: ${params.toString()}`);
+    
+    // Create request config with cache-busting headers
+    const config = {
+      params,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    };
+    
+    return api.get('/recommendations', config);
+  }
 };
 
 // Health check service for diagnostics
@@ -258,7 +300,7 @@ export default {
   movies,
   ratings,
   recommendations,
-  watchlist, // Add the new watchlist service
+  watchlist,
   health,
   retry,
   checkApiConnection

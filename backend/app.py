@@ -360,27 +360,70 @@ def get_recommendations():
         # Get limit parameter
         limit = request.args.get('limit', 8, type=int)
         
-        # Get recommendations
-        recommendations = movie_recommender.get_user_recommendations(user_id, limit=limit)
+        # Check if refresh is requested (force new recommendations)
+        refresh_requested = request.args.get('refresh') == 'true'
+        
+        # Add timestamp and request_id for debugging
+        request_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        request_id = f"req_{int(datetime.now().timestamp())}"
+        
+        # Log the request with details
+        logger.info(f"[{request_id}] Recommendation request - User: {user_id}, Limit: {limit}, Refresh: {refresh_requested}, Time: {request_timestamp}")
+        
+        recommendations = []
+        message = ""
+        
+        # Use a different approach based on whether refresh is requested
+        if refresh_requested:
+            logger.info(f"[{request_id}] Performing full refresh of recommendations for user {user_id}")
+            recommendations = movie_recommender.refresh_recommendations(user_id, limit=limit)
+            message = "Fresh recommendations based on your taste"
+        else:
+            logger.info(f"[{request_id}] Getting standard recommendations for user {user_id}")
+            recommendations = movie_recommender.get_user_recommendations(user_id, limit=limit)
+            message = "Based on your ratings"
+        
+        logger.info(f"[{request_id}] Generated {len(recommendations)} recommendations")
         
         if recommendations:
-            return jsonify({
+            # Add unique request identifier to response for debugging
+            response = {
                 "status": "success",
                 "recommendations": [movie.to_dict() for movie in recommendations],
-                "message": "Based on your ratings"
-            })
+                "message": message,
+                "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                "refreshed": refresh_requested,
+                "request_id": request_id,
+                "model_info": movie_recommender.get_model_info()
+            }
+            
+            # Return with no-cache headers to prevent browser caching
+            resp = jsonify(response)
+            resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            resp.headers['Pragma'] = 'no-cache'
+            resp.headers['Expires'] = '0'
+            return resp
         else:
             # If no personalized recommendations, return popular movies
             popular_movies = Movie.query.order_by(Movie.popularity.desc()).limit(limit).all()
             
-            return jsonify({
+            # Return with no-cache headers
+            resp = jsonify({
                 "status": "success",
                 "recommendations": [movie.to_dict() for movie in popular_movies],
-                "message": "Popular movies you might like"
+                "message": "Popular movies you might like",
+                "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                "refreshed": refresh_requested,
+                "request_id": request_id
             })
+            resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            resp.headers['Pragma'] = 'no-cache'
+            resp.headers['Expires'] = '0'
+            return resp
             
     except Exception as e:
         logger.error(f"Error getting recommendations: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/auth/register', methods=['POST'])
@@ -752,6 +795,69 @@ def get_movie_rating(movie_id):
             
     except Exception as e:
         logger.error(f"Error getting movie rating: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+    
+@app.route('/api/ratings/<int:movie_id>', methods=['POST'])
+def add_rating(movie_id):
+    """Add or update a movie rating"""
+    try:
+        # Check if user is authenticated
+        user_id = session.get('user_id')
+        
+        if not user_id:
+            return jsonify({
+                "status": "error", 
+                "message": "Authentication required"
+            }), 401
+            
+        # Check if movie exists
+        movie = db.session.get(Movie, movie_id)
+        if not movie:
+            return jsonify({"status": "error", "message": "Movie not found"}), 404
+            
+        # Get data from request
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+            
+        rating_value = data.get('rating')
+        review = data.get('review', '')
+        
+        if not rating_value or not isinstance(rating_value, (int, float)):
+            return jsonify({"status": "error", "message": "Invalid rating value"}), 400
+            
+        # Check if rating already exists
+        existing_rating = Rating.query.filter_by(user_id=user_id, movie_id=movie_id).first()
+        
+        if existing_rating:
+            # Update existing rating
+            existing_rating.rating = rating_value
+            existing_rating.review = review
+            existing_rating.updated_at = datetime.utcnow()
+        else:
+            # Create new rating
+            new_rating = Rating(
+                user_id=user_id,
+                movie_id=movie_id,
+                rating=rating_value,
+                review=review
+            )
+            db.session.add(new_rating)
+            
+        db.session.commit()
+        
+        # Get the updated or new rating
+        result_rating = Rating.query.filter_by(user_id=user_id, movie_id=movie_id).first()
+        
+        return jsonify({
+            "status": "success",
+            "message": "Rating saved successfully",
+            "rating": result_rating.to_dict()
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error saving rating: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/ratings/<int:movie_id>', methods=['DELETE'])

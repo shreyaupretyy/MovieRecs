@@ -49,7 +49,8 @@ const SearchBar = () => {
       setIsLoading(true);
       setError('');
       
-      const response = await movies.search(query, '', 1, 5); // Limit to 5 results for the dropdown
+      // Explicitly search for movie titles only
+      const response = await movies.search(query, '', 1, 5, 'title_only=true'); // Add title_only parameter
       
       if (response.data && response.data.movies) {
         setResults(response.data.movies);
@@ -74,14 +75,14 @@ const SearchBar = () => {
     }
     
     if (query.trim().length > 0) {
-      // Navigate to search results page with the search query as a parameter
+      // Create a more explicit search URL with title_only parameter
       const searchQuery = encodeURIComponent(query.trim());
       console.log(`Navigating to search results with query: ${searchQuery}`);
       
-      // Use navigate with a search parameter object for clarity
+      // Pass title_only parameter to ensure consistent search behavior
       navigate({
         pathname: '/movies',
-        search: `?search=${searchQuery}`
+        search: `?search=${searchQuery}&title_only=true`
       });
       
       setShowResults(false);
@@ -175,14 +176,11 @@ const SearchBar = () => {
                 </li>
               ))}
               
-              {/* See all results button with more explicit debugging */}
+              {/* See all results button with proper search parameter */}
               <li className="border-t">
                 <button
                   className="w-full px-4 py-2 text-center text-blue-600 hover:bg-gray-100 focus:outline-none focus:bg-gray-100"
-                  onClick={() => {
-                    console.log(`See all results clicked for query: ${query}`);
-                    handleSubmit();
-                  }}
+                  onClick={handleSubmit}
                 >
                   See all results for "{query}"
                 </button>

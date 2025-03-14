@@ -5,7 +5,13 @@ import Pagination from '../components/Pagination';
 import GenreFilter from '../components/GenreFilter';
 import { movies } from '../services/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFilter, faSortAmountDown } from '@fortawesome/free-solid-svg-icons';
+import { 
+  faFilter, 
+  faSortAmountDown, 
+  faTimes,
+  faChevronDown,
+  faChevronUp
+} from '@fortawesome/free-solid-svg-icons';
 
 const MoviesPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -65,8 +71,8 @@ const MoviesPage = () => {
       order 
     });
     
-    // Scroll to top of the page
-    window.scrollTo(0, 0);
+    // Scroll to top of the page with smooth behavior
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   
   const handleGenreSelect = (selectedGenre) => {
@@ -96,71 +102,49 @@ const MoviesPage = () => {
     });
   };
   
+  const clearFilters = () => {
+    setSearchParams({
+      page: '1'
+    });
+  };
+  
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">Explore Movies</h1>
-      
-      <div className="md:flex md:items-start">
-        {/* Filters - Desktop */}
-        <div className="hidden md:block md:w-1/4 md:pr-6">
-          <div className="bg-white p-4 rounded-lg shadow-sm">
-            <h2 className="font-bold text-lg mb-4">Filters</h2>
-            <GenreFilter onGenreSelect={handleGenreSelect} selectedGenre={genre} />
-            
-            <div className="mt-6">
-              <h3 className="text-lg font-medium text-gray-800 mb-3">Sort By</h3>
-              <div className="flex flex-col space-y-2">
-                <div className="flex items-center">
-                  <select 
-                    value={sortBy}
-                    onChange={handleSortChange}
-                    className="w-full px-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {sortOptions.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <button
-                  onClick={handleOrderToggle}
-                  className="flex items-center px-3 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-100"
-                >
-                  <FontAwesomeIcon 
-                    icon={faSortAmountDown} 
-                    className={`mr-2 ${order === 'asc' ? 'transform rotate-180' : ''}`}
-                  />
-                  {order === 'asc' ? 'Ascending' : 'Descending'}
-                </button>
-              </div>
-            </div>
-          </div>
+    <div className="container mx-auto px-4 py-8 bg-gray-50">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">Explore Movies</h1>
+          <p className="text-gray-600">Discover and filter through our collection of films</p>
         </div>
         
-        {/* Mobile filter toggle */}
-        <div className="md:hidden mb-4">
-          <button 
-            onClick={() => setShowFilters(!showFilters)}
-            className="w-full flex items-center justify-between p-4 bg-white rounded-lg shadow-sm"
-          >
-            <span className="font-medium">Filters & Sort</span>
-            <FontAwesomeIcon icon={faFilter} />
-          </button>
-          
-          {showFilters && (
-            <div className="mt-2 bg-white p-4 rounded-lg shadow-sm">
-              <GenreFilter onGenreSelect={handleGenreSelect} selectedGenre={genre} />
+        <div className="md:flex md:gap-8">
+          {/* Filters - Desktop */}
+          <div className="hidden md:block md:w-1/4 flex-shrink-0">
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="font-bold text-lg text-gray-800">Filters</h2>
+                {(genre || sortBy !== 'vote_average' || order !== 'desc') && (
+                  <button 
+                    onClick={clearFilters}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
               
-              <div className="mt-6">
-                <h3 className="text-lg font-medium text-gray-800 mb-3">Sort By</h3>
-                <div className="flex flex-col space-y-2">
-                  <div className="flex items-center">
+              <div className="mb-6 pb-6 border-b border-gray-100">
+                <GenreFilter onGenreSelect={handleGenreSelect} selectedGenre={genre} />
+              </div>
+              
+              <div>
+                <h3 className="font-medium text-gray-700 mb-3">Sort Options</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-2">Sort By</label>
                     <select 
                       value={sortBy}
                       onChange={handleSortChange}
-                      className="w-full px-3 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2.5 rounded-md border border-gray-300 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
                     >
                       {sortOptions.map(option => (
                         <option key={option.value} value={option.value}>
@@ -170,64 +154,179 @@ const MoviesPage = () => {
                     </select>
                   </div>
                   
-                  <button
-                    onClick={handleOrderToggle}
-                    className="flex items-center px-3 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-100"
-                  >
-                    <FontAwesomeIcon 
-                      icon={faSortAmountDown} 
-                      className={`mr-2 ${order === 'asc' ? 'transform rotate-180' : ''}`}
-                    />
-                    {order === 'asc' ? 'Ascending' : 'Descending'}
-                  </button>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-2">Order</label>
+                    <button
+                      onClick={handleOrderToggle}
+                      className="w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 shadow-sm transition-colors"
+                    >
+                      <span>{order === 'asc' ? 'Ascending' : 'Descending'}</span>
+                      <FontAwesomeIcon 
+                        icon={faSortAmountDown} 
+                        className={`text-gray-500 ${order === 'asc' ? 'transform rotate-180' : ''}`}
+                      />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          )}
-        </div>
-        
-        {/* Results */}
-        <div className="md:w-3/4">
-          {isLoading ? (
-            <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            </div>
-          ) : error ? (
-            <div className="bg-red-50 p-4 rounded-lg">
-              <p className="text-red-700">{error}</p>
-            </div>
-          ) : (
-            <>
-              <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
-                <p className="text-gray-600">
+          </div>
+          
+          {/* Mobile filter toggle */}
+          <div className="md:hidden mb-6">
+            <button 
+              onClick={() => setShowFilters(!showFilters)}
+              className="w-full flex items-center justify-between p-4 bg-white rounded-lg shadow-sm border border-gray-100"
+            >
+              <div className="flex items-center">
+                <FontAwesomeIcon icon={faFilter} className="text-gray-500 mr-3" />
+                <span className="font-medium text-gray-800">Filters & Sort</span>
+              </div>
+              <FontAwesomeIcon 
+                icon={showFilters ? faChevronUp : faChevronDown} 
+                className="text-gray-500" 
+              />
+            </button>
+            
+            {showFilters && (
+              <div className="mt-2 bg-white p-5 rounded-lg shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="font-medium text-gray-800">Filters</h3>
+                  {(genre || sortBy !== 'vote_average' || order !== 'desc') && (
+                    <button 
+                      onClick={clearFilters}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
+                
+                <div className="mb-6 pb-5 border-b border-gray-100">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Genre</h4>
+                  <GenreFilter onGenreSelect={handleGenreSelect} selectedGenre={genre} />
+                </div>
+                
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Sort Options</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Sort By</label>
+                      <select 
+                        value={sortBy}
+                        onChange={handleSortChange}
+                        className="w-full px-3 py-2 rounded-md border border-gray-300 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        {sortOptions.map(option => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Order</label>
+                      <button
+                        onClick={handleOrderToggle}
+                        className="w-full flex items-center justify-between px-3 py-2 text-sm rounded-md border border-gray-300 bg-white text-gray-700"
+                      >
+                        <span>{order === 'asc' ? 'Ascending' : 'Descending'}</span>
+                        <FontAwesomeIcon 
+                          icon={faSortAmountDown} 
+                          className={`text-gray-500 ${order === 'asc' ? 'transform rotate-180' : ''}`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Results */}
+          <div className="md:w-3/4 flex-grow">
+            {/* Results Header */}
+            <div className="bg-white p-4 rounded-lg shadow-sm mb-6 border border-gray-100 flex justify-between items-center">
+              <div>
+                <p className="text-gray-700 font-medium">
                   {genre 
-                    ? `Showing ${genre} movies (${pagination.totalItems} results)` 
-                    : `Showing all movies (${pagination.totalItems} results)`
+                    ? `${genre} Movies` 
+                    : `All Movies`
                   }
                 </p>
+                <p className="text-sm text-gray-500">{pagination.totalItems} results</p>
               </div>
               
+              {genre && (
+                <button 
+                  onClick={() => handleGenreSelect('')}
+                  className="text-sm text-gray-600 hover:text-gray-800 flex items-center"
+                >
+                  <FontAwesomeIcon icon={faTimes} className="mr-1" />
+                  Clear genre
+                </button>
+              )}
+            </div>
+            
+            {isLoading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                {moviesList && moviesList.length > 0 ? (
-                  moviesList.map(movie => (
-                    <MovieCard key={movie.id} movie={movie} showRating={true} />
-                  ))
-                ) : (
-                  <div className="col-span-3 py-8 text-center text-gray-600">
-                    No movies found matching your filters.
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="bg-white rounded-lg overflow-hidden shadow-sm border border-gray-100">
+                    <div className="h-64 bg-gray-200 animate-pulse"></div>
+                    <div className="p-4">
+                      <div className="h-5 bg-gray-200 rounded mb-3 animate-pulse"></div>
+                      <div className="h-4 bg-gray-200 rounded w-1/2 mb-2 animate-pulse"></div>
+                      <div className="h-4 bg-gray-200 rounded w-1/4 animate-pulse"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : error ? (
+              <div className="bg-white p-6 rounded-lg shadow-sm border border-red-100">
+                <div className="text-red-600 font-medium mb-2">Error</div>
+                <p className="text-gray-700">{error}</p>
+                <button 
+                  onClick={fetchMovies}
+                  className="mt-4 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  {moviesList && moviesList.length > 0 ? (
+                    moviesList.map(movie => (
+                      <div key={movie.id} className="transition-all duration-200 transform hover:translate-y-[-4px]">
+                        <MovieCard key={movie.id} movie={movie} showRating={true} />
+                      </div>
+                    ))
+                  ) : (
+                    <div className="col-span-3 py-12 text-center bg-white rounded-lg shadow-sm border border-gray-100">
+                      <p className="text-gray-600 mb-4">No movies found matching your filters.</p>
+                      <button
+                        onClick={clearFilters}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                      >
+                        Reset Filters
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
+                {pagination.totalPages > 1 && (
+                  <div className="mt-10">
+                    <Pagination 
+                      currentPage={pagination.currentPage} 
+                      totalPages={pagination.totalPages} 
+                      onPageChange={handlePageChange} 
+                    />
                   </div>
                 )}
-              </div>
-              
-              {pagination.totalPages > 1 && (
-                <Pagination 
-                  currentPage={pagination.currentPage} 
-                  totalPages={pagination.totalPages} 
-                  onPageChange={handlePageChange} 
-                />
-              )}
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

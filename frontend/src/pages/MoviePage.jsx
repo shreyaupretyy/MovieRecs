@@ -16,7 +16,7 @@ import {
 import { faBookmark as farBookmark } from '@fortawesome/free-regular-svg-icons';
 import RatingStars from '../components/RatingStars';
 import MovieCard from '../components/MovieCard';
-import { movies, ratings } from '../services/api';
+import { movies, ratings, watchlist } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 const MoviePage = () => {
@@ -150,71 +150,37 @@ const MoviePage = () => {
     if (!currentUser || !id) return;
     
     try {
-      const timestamp = Date.now();
-      const response = await fetch(`/api/watchlist/check/${id}?_t=${timestamp}`, {
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
-        }
-      });
+      setWatchlistLoading(true);
+      setWatchlistError(null);
       
-      if (response.ok) {
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          console.error('Non-JSON response when checking watchlist status');
-          return;
-        }
+      const response = await watchlist.checkMovieInWatchlist(id);
+      
+      if (response.data) {
+        console.log("Watchlist check response:", response.data);
         
-        const watchlistData = await response.json();
-        console.log("Watchlist check response:", watchlistData);
-        
-        if (watchlistData.status === 'success') {
-          setInWatchlist(watchlistData.in_watchlist || false);
+        if (response.data.status === 'success') {
+          setInWatchlist(response.data.in_watchlist || false);
           
-          if (watchlistData.in_watchlist && watchlistData.watchlist_id) {
-            setWatchlistId(watchlistData.watchlist_id);
+          if (response.data.in_watchlist && response.data.watchlist_id) {
+            setWatchlistId(response.data.watchlist_id);
             
-            // If we have a watchlist_id, fetch the watchlist item details
-            await fetchWatchlistDetails(watchlistData.watchlist_id);
+            // Get watchlist item details if it's in the watchlist
+            if (response.data.notes) {
+              setWatchlistNotes(response.data.notes);
+            }
+            if (response.data.added_at) {
+              setWatchlistAddedTime(response.data.added_at);
+            }
           }
         } else {
-          console.error("API returned error status:", watchlistData);
+          console.error("API returned error status:", response.data);
         }
-      } else {
-        console.error(`Error checking watchlist status: ${response.status}`);
       }
     } catch (err) {
       console.error("Failed to check watchlist status:", err);
       setWatchlistError("Could not check watchlist status");
-    }
-  };
-  
-  // Fetch watchlist item details (notes, timestamp, etc)
-  const fetchWatchlistDetails = async (itemId) => {
-    if (!currentUser || !itemId) return;
-    
-    try {
-      const response = await fetch(`/api/watchlist/${itemId}`, {
-        credentials: 'include',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Watchlist item details:", data);
-        
-        if (data.status === 'success' && data.item) {
-          setWatchlistNotes(data.item.notes || '');
-          if (data.item.added_at) {
-            setWatchlistAddedTime(data.item.added_at);
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch watchlist details:", err);
+    } finally {
+      setWatchlistLoading(false);
     }
   };
   
@@ -226,68 +192,30 @@ const MoviePage = () => {
     setWatchlistError(null);
     
     try {
-      const timestamp = Date.now();
-      
       if (inWatchlist && watchlistId) {
         // Remove from watchlist
-        console.log(`Removing movie ${id} from watchlist`);
+        await watchlist.removeFromWatchlist(watchlistId);
         
-        const response = await fetch(`/api/watchlist/${watchlistId}?_t=${timestamp}`, {
-          method: 'DELETE',
-          credentials: 'include',
-          headers: {
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache'
-          }
-        });
-        
-        if (response.ok) {
-          console.log('Movie removed from watchlist');
-          setInWatchlist(false);
-          setWatchlistId(null);
-          setWatchlistNotes('');
-          setWatchlistAddedTime('');
-          showTemporaryMessage('Removed from your watchlist');
-        } else {
-          const errorText = await response.text();
-          throw new Error(`Failed to remove from watchlist (${response.status}): ${errorText}`);
-        }
+        setInWatchlist(false);
+        setWatchlistId(null);
+        setWatchlistNotes('');
+        setWatchlistAddedTime('');
+        showTemporaryMessage('Removed from your watchlist');
       } else {
         // Add to watchlist
-        console.log(`Adding movie ${id} to watchlist`);
+        const response = await watchlist.addToWatchlist(id, watchlistNotes);
         
-        // Format current time in UTC
-        const currentTime = "2025-03-14 13:46:06"; // Using the provided UTC time
-        
-        const response = await fetch(`/api/watchlist?_t=${timestamp}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache'
-          },
-          body: JSON.stringify({ 
-            movie_id: id,
-            added_at: currentTime
-          }),
-          credentials: 'include'
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Movie added to watchlist:', data);
+        if (response.data && response.data.status === 'success') {
+          setInWatchlist(true);
+          setWatchlistId(response.data.watchlist_id);
           
-          if (data.status === 'success') {
-            setInWatchlist(true);
-            setWatchlistId(data.watchlist_id);
-            setWatchlistAddedTime(currentTime);
-            showTemporaryMessage('Added to your watchlist');
-          } else {
-            throw new Error(data.message || 'Failed to add to watchlist');
-          }
+          // Use the returned added_at time or fall back to current time
+          const addedTime = response.data.added_at || getCurrentUTCTime();
+          setWatchlistAddedTime(addedTime);
+          
+          showTemporaryMessage('Added to your watchlist');
         } else {
-          const errorText = await response.text();
-          throw new Error(`Failed to add to watchlist (${response.status}): ${errorText}`);
+          throw new Error((response.data && response.data.message) || 'Failed to add to watchlist');
         }
       }
     } catch (err) {
@@ -303,26 +231,12 @@ const MoviePage = () => {
     if (!currentUser || !watchlistId) return;
     
     setWatchlistLoading(true);
+    setWatchlistError(null);
     
     try {
-      const response = await fetch(`/api/watchlist/${watchlistId}/notes`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ notes: watchlistNotes }),
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Notes updated:', data);
-        setIsEditingNotes(false);
-        showTemporaryMessage('Notes updated');
-      } else {
-        throw new Error('Failed to update notes');
-      }
+      await watchlist.updateNotes(watchlistId, watchlistNotes);
+      setIsEditingNotes(false);
+      showTemporaryMessage('Notes updated');
     } catch (err) {
       console.error('Error updating watchlist notes:', err);
       setWatchlistError('Failed to save notes');
@@ -391,8 +305,8 @@ const MoviePage = () => {
       // Update local state
       try {
         const ratingResponse = await ratings.get(id);
-        if (ratingResponse.data && ratingResponse.data.review) {
-          setUserReview(ratingResponse.data.review || '');
+        if (ratingResponse.data && ratingResponse.data.rating) {
+          setUserReview(ratingResponse.data.rating.review || '');
         }
       } catch (err) {
         console.error("Couldn't refresh user review");
@@ -447,6 +361,36 @@ const MoviePage = () => {
         setWatchlistId(null);
         setWatchlistNotes('');
       }
+    }
+  };
+  
+  // Fetch watchlist item details (notes, timestamp, etc)
+  const fetchWatchlistDetails = async (itemId) => {
+    if (!currentUser || !itemId) return;
+    
+    try {
+      const response = await fetch(`/api/watchlist/${itemId}`, {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Watchlist item details:", data);
+        
+        if (data.status === 'success' && data.item) {
+          setWatchlistNotes(data.item.notes || '');
+          if (data.item.added_at) {
+            setWatchlistAddedTime(data.item.added_at);
+          }
+        }
+      } else {
+        console.error(`Error fetching watchlist details: ${response.status}`);
+      }
+    } catch (err) {
+      console.error("Failed to fetch watchlist details:", err);
     }
   };
   
@@ -632,7 +576,7 @@ const MoviePage = () => {
                         <span>Added: {
                           watchlistAddedTime ? 
                           new Date(watchlistAddedTime).toLocaleDateString() :
-                          '2025-03-14' // Fallback date
+                          new Date().toLocaleDateString() // Fallback to current date
                         }</span>
                         <span>By: {currentUser.username}</span>
                       </div>
@@ -863,7 +807,7 @@ const MoviePage = () => {
                     <strong>Want to rate this movie or add it to your watchlist?</strong> Sign in to track movies you want to watch and leave ratings.
                   </p>
                   <div className="flex space-x-2">
-                  <Link to="/login" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium">
+                    <Link to="/login" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium">
                       Sign in
                     </Link>
                     <Link to="/register" className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 text-sm font-medium">
@@ -892,7 +836,6 @@ const MoviePage = () => {
           </div>
         </div>
       </div>
-
     </div>
   );
 };
