@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 from dotenv import load_dotenv
-from models import db, Movie, User, Rating
+from models import db, Movie, User, Rating, Watchlist
 import recommender
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -497,42 +497,27 @@ def logout():
     
 @app.route('/api/auth/check', methods=['GET'])
 def check_auth():
-    """Check if the user is authenticated"""
-    try:
-        # Check if user is authenticated
-        user_id = session.get('user_id')
-        
-        if not user_id:
-            return jsonify({
-                "status": "success", 
-                "authenticated": False
-            })
-            
-        # Get user
+    """Check authentication status"""
+    user_id = session.get('user_id')
+    
+    if user_id:
         user = User.query.get(user_id)
-        
-        if not user:
-            # Clear invalid session
-            session.pop('user_id', None)
-            session.pop('username', None)
+        if user:
             return jsonify({
-                "status": "success", 
-                "authenticated": False
+                "status": "success",
+                "authenticated": True,
+                "user": {
+                    "id": user.id,
+                    "username": user.username
+                },
+                "server_time": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
             })
-            
-        return jsonify({
-            "status": "success",
-            "authenticated": True,
-            "user": user.to_dict()
-        })
-        
-    except Exception as e:
-        logger.error(f"Error checking authentication: {e}")
-        return jsonify({
-            "status": "error", 
-            "message": str(e),
-            "authenticated": False
-        }), 500
+    
+    return jsonify({
+        "status": "success",
+        "authenticated": False,
+        "server_time": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    })
 
 @app.route('/api/user/profile', methods=['GET'])
 def get_user_profile():
@@ -602,87 +587,71 @@ def get_current_user():
         logger.error(f"Error getting current user: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route('/api/ratings', methods=['POST'])
-def add_rating():
-    """Add or update a movie rating"""
+@app.route('/api/user/ratings', methods=['GET'])
+def get_user_ratings():
+    """Get all ratings by the current user with pagination and full movie details"""
     try:
         # Check if user is authenticated
         user_id = session.get('user_id')
-        
         if not user_id:
             return jsonify({
                 "status": "error", 
                 "message": "Authentication required"
             }), 401
-            
-        # Get request data
-        data = request.get_json()
         
-        if not data:
-            return jsonify({"status": "error", "message": "No input data provided"}), 400
-            
-        # Check if required fields are present
-        movie_id = data.get('movie_id')
-        rating_value = data.get('rating')
+        # Get pagination parameters from query
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
         
-        if not all([movie_id, rating_value]):
-            return jsonify({"status": "error", "message": "Missing required fields"}), 400
-            
-        # Validate rating value
-        if not (0.5 <= float(rating_value) <= 5.0):
-            return jsonify({"status": "error", "message": "Rating must be between 0.5 and 5.0"}), 400
-            
-        # Check if movie exists
-        movie = Movie.query.get(movie_id)
-        if not movie:
-            return jsonify({"status": "error", "message": "Movie not found"}), 404
-            
-        # Check if rating exists
-        existing_rating = Rating.query.filter_by(user_id=user_id, movie_id=movie_id).first()
+        # Join Rating and Movie tables for efficient retrieval
+        query = db.session.query(Rating, Movie)\
+            .join(Movie, Rating.movie_id == Movie.id)\
+            .filter(Rating.user_id == user_id)\
+            .order_by(Rating.updated_at.desc())
         
-        if existing_rating:
-            # Update existing rating
-            existing_rating.rating = float(rating_value)  # Use rating consistently
-            
-            # Update review if provided
-            if 'review' in data:
-                existing_rating.review = data['review']
-                
-            existing_rating.updated_at = datetime.utcnow()
-            db.session.commit()
-            
-            return jsonify({
-                "status": "success", 
-                "message": "Rating updated successfully",
-                "rating": existing_rating.to_dict()
-            })
-        else:
-            # Create new rating
-            new_rating = Rating(
-                user_id=user_id,
-                movie_id=movie_id,
-                rating=float(rating_value)  # Use rating consistently
-            )
-            
-            # Add review if provided
-            if 'review' in data:
-                new_rating.review = data['review']
-            
-            # Add to database
-            db.session.add(new_rating)
-            db.session.commit()
-            
-            return jsonify({
-                "status": "success", 
-                "message": "Rating added successfully",
-                "rating": new_rating.to_dict()
-            }), 201
-            
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Error adding rating: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        # Get total count for pagination
+        total_ratings = query.count()
+        
+        # Apply pagination
+        paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        # Format the response
+        ratings = []
+        for rating, movie in paginated.items:
+            rating_data = {
+                "id": rating.id,
+                "movie_id": movie.id,
+                "rating": rating.rating,
+                "review": rating.review,
+                "created_at": rating.created_at.isoformat() if rating.created_at else None,
+                "updated_at": rating.updated_at.isoformat() if rating.updated_at else None,
+                "movie": {
+                    "id": movie.id,
+                    "title": movie.title,
+                    "poster_path": movie.poster_path,
+                    "release_date": movie.release_date.isoformat() if movie.release_date else None,
+                    "vote_average": movie.vote_average
+                }
+            }
+            ratings.append(rating_data)
+        
+        return jsonify({
+            "status": "success",
+            "ratings": ratings,
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total_ratings,
+                "pages": paginated.pages
+            }
+        })
     
+    except Exception as e:
+        app.logger.error(f"Error fetching user ratings: {str(e)}")
+        return jsonify({
+            "status": "error", 
+            "message": f"Error fetching ratings: {str(e)}"
+        }), 500 
 
     
 @app.route('/api/user/rated-movies', methods=['GET'])
@@ -701,36 +670,37 @@ def get_user_rated_movies():
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         
-        # Get all ratings for this user
-        ratings_query = Rating.query.filter_by(user_id=user_id).order_by(Rating.updated_at.desc())
+        # Join Rating and Movie tables for efficient retrieval
+        query = db.session.query(Rating, Movie)\
+            .join(Movie, Rating.movie_id == Movie.id)\
+            .filter(Rating.user_id == user_id)\
+            .order_by(Rating.updated_at.desc())
         
         # Get total count for pagination
-        total_ratings = ratings_query.count()
+        total_ratings = query.count()
         
         # Apply pagination
-        paginated_ratings = ratings_query.paginate(page=page, per_page=per_page)
+        paginated = query.paginate(page=page, per_page=per_page, error_out=False)
         
-        # For each rating, get the full movie details
+        # Format the response
         rated_movies = []
-        for rating in paginated_ratings.items:
-            # Get the movie
-            movie = Movie.query.get(rating.movie_id)
-            if movie:
-                # Convert movie to dict
-                movie_data = movie.to_dict()
-                # Add rating information
-                movie_data['user_rating'] = rating.rating
-                movie_data['user_review'] = rating.review
-                movie_data['rated_at'] = rating.created_at.isoformat() if rating.created_at else None
-                movie_data['updated_at'] = rating.updated_at.isoformat() if rating.updated_at else None
-                
-                rated_movies.append(movie_data)
+        for rating, movie in paginated.items:
+            # Convert movie to dict
+            movie_data = movie.to_dict()
+            # Add rating information
+            movie_data['user_rating'] = rating.rating
+            movie_data['rating_id'] = rating.id
+            movie_data['user_review'] = rating.review
+            movie_data['rated_at'] = rating.created_at.isoformat() if rating.created_at else None
+            movie_data['updated_at'] = rating.updated_at.isoformat() if rating.updated_at else None
+            
+            rated_movies.append(movie_data)
         
         return jsonify({
             "status": "success",
             "rated_movies": rated_movies,
             "current_page": page,
-            "pages": paginated_ratings.pages,
+            "pages": paginated.pages,
             "total": total_ratings
         })
     
@@ -740,6 +710,7 @@ def get_user_rated_movies():
             "status": "error", 
             "message": f"Error fetching rated movies: {str(e)}"
         }), 500
+
 
 @app.route('/api/ratings/<int:movie_id>', methods=['GET'])
 def get_movie_rating(movie_id):
@@ -855,6 +826,277 @@ def get_genres():
             "status": "error",
             "message": "Failed to retrieve genres"
         }), 500
+    
+# Watchlist API Endpoints
+
+@app.route('/api/watchlist', methods=['GET'])
+def get_watchlist():
+    """Get the current user's watchlist with pagination"""
+    # Check authentication
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({
+            "status": "error",
+            "message": "Authentication required"
+        }), 401
+    
+    # Get pagination parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 12, type=int)
+    
+    try:
+        # Join watchlist with movies to get full details
+        query = db.session.query(Watchlist, Movie)\
+            .join(Movie, Watchlist.movie_id == Movie.id)\
+            .filter(Watchlist.user_id == user_id)\
+            .order_by(Watchlist.created_at.desc())
+        
+        # Get total count for pagination
+        total_count = query.count()
+        
+        # Apply pagination
+        paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        # Format the response
+        items = []
+        for watchlist_item, movie in paginated.items:
+            movie_dict = movie.to_dict()
+            item_data = {
+                "watchlist_id": watchlist_item.id,
+                "added_at": watchlist_item.created_at.isoformat() if watchlist_item.created_at else None,
+                "notes": watchlist_item.notes,
+                "id": movie.id,  # Ensure we have the movie ID
+                "title": movie.title,
+                "poster_path": movie.poster_path,
+                "release_date": movie.release_date.isoformat() if movie.release_date else None,
+                "vote_average": movie.vote_average
+            }
+            items.append(item_data)
+        
+        return jsonify({
+            "status": "success",
+            "items": items,
+            "pagination": {
+                "page": page,
+                "per_page": per_page,
+                "total": total_count,
+                "pages": paginated.pages
+            }
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error fetching watchlist: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to retrieve watchlist: {str(e)}"
+        }), 500
+    
+@app.route('/api/watchlist', methods=['POST'])
+def add_to_watchlist():
+    """Add a movie to the user's watchlist"""
+    # Check authentication
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({
+            "status": "error",
+            "message": "Authentication required"
+        }), 401
+    
+    data = request.get_json()
+    if not data or 'movie_id' not in data:
+        return jsonify({
+            "status": "error",
+            "message": "Movie ID is required"
+        }), 400
+    
+    movie_id = data['movie_id']
+    notes = data.get('notes', '')
+    
+    try:
+        # Check if movie exists in the database
+        movie = Movie.query.get(movie_id)
+        if not movie:
+            return jsonify({
+                "status": "error",
+                "message": f"Movie with ID {movie_id} not found"
+            }), 404
+        
+        # Check if movie is already in watchlist
+        existing = Watchlist.query.filter_by(
+            user_id=user_id, 
+            movie_id=movie_id
+        ).first()
+        
+        if existing:
+            return jsonify({
+                "status": "error",
+                "message": "Movie is already in your watchlist",
+                "watchlist_id": existing.id
+            }), 409
+        
+        # Add to watchlist
+        watchlist_item = Watchlist(
+            user_id=user_id,
+            movie_id=movie_id,
+            notes=notes,
+            created_at=datetime.utcnow()
+        )
+        
+        db.session.add(watchlist_item)
+        db.session.commit()
+        
+        return jsonify({
+            "status": "success",
+            "message": "Movie added to watchlist",
+            "watchlist_id": watchlist_item.id
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error adding to watchlist: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to add movie to watchlist: {str(e)}"
+        }), 500
+    
+@app.route('/api/watchlist/<int:watchlist_id>', methods=['DELETE'])
+def remove_from_watchlist(watchlist_id):
+    """Remove a movie from the user's watchlist"""
+    # Check authentication
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({
+            "status": "error",
+            "message": "Authentication required"
+        }), 401
+    
+    try:
+        # Find the watchlist item
+        watchlist_item = Watchlist.query.filter_by(
+            id=watchlist_id,
+            user_id=user_id
+        ).first()
+        
+        if not watchlist_item:
+            return jsonify({
+                "status": "error",
+                "message": "Watchlist item not found"
+            }), 404
+        
+        # Remove from database
+        db.session.delete(watchlist_item)
+        db.session.commit()
+        
+        return jsonify({
+            "status": "success",
+            "message": "Movie removed from watchlist"
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error removing from watchlist: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to remove movie from watchlist: {str(e)}"
+        }), 500
+    
+@app.route('/api/watchlist/<int:watchlist_id>/notes', methods=['PUT'])
+def update_watchlist_notes(watchlist_id):
+    """Update notes for a watchlist item"""
+    # Check authentication
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({
+            "status": "error",
+            "message": "Authentication required"
+        }), 401
+    
+    data = request.get_json()
+    if not data or 'notes' not in data:
+        return jsonify({
+            "status": "error",
+            "message": "Notes field is required"
+        }), 400
+    
+    try:
+        # Find the watchlist item
+        watchlist_item = Watchlist.query.filter_by(
+            id=watchlist_id,
+            user_id=user_id
+        ).first()
+        
+        if not watchlist_item:
+            return jsonify({
+                "status": "error",
+                "message": "Watchlist item not found"
+            }), 404
+        
+        # Update notes
+        watchlist_item.notes = data['notes']
+        db.session.commit()
+        
+        return jsonify({
+            "status": "success",
+            "message": "Notes updated successfully"
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating watchlist notes: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to update notes: {str(e)}"
+        }), 500
+    
+@app.route('/api/watchlist/check/<int:movie_id>', methods=['GET'])
+def check_watchlist(movie_id):
+    """Check if a movie is in the user's watchlist"""
+    # Check authentication
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({
+            "status": "error",
+            "message": "Authentication required"
+        }), 401
+    
+    try:
+        # First verify the movie exists
+        movie = Movie.query.get(movie_id)
+        if not movie:
+            return jsonify({
+                "status": "error",
+                "message": f"Movie with ID {movie_id} not found"
+            }), 404
+            
+        # Check if movie is in watchlist
+        watchlist_item = Watchlist.query.filter_by(
+            user_id=user_id,
+            movie_id=movie_id
+        ).first()
+        
+        if watchlist_item:
+            return jsonify({
+                "status": "success",
+                "in_watchlist": True,
+                "watchlist_id": watchlist_item.id,
+                "notes": watchlist_item.notes,
+                "added_at": watchlist_item.created_at.isoformat() if watchlist_item.created_at else None
+            })
+        else:
+            return jsonify({
+                "status": "success",
+                "in_watchlist": False
+            })
+            
+    except Exception as e:
+        app.logger.error(f"Error checking watchlist: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to check watchlist: {str(e)}"
+        }), 500
+
+    
+
 
 if __name__ == '__main__':
     with app.app_context():

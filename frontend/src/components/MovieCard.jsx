@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faStar } from '@fortawesome/free-solid-svg-icons';
+import { faStar, faBookmark as fasBookmark } from '@fortawesome/free-solid-svg-icons';
+import { faBookmark as farBookmark } from '@fortawesome/free-regular-svg-icons';
 import RatingStars from './RatingStars';
 import { useAuth } from '../contexts/AuthContext';
 import { ratings } from '../services/api';
 
-const MovieCard = ({ movie, showRating = false, onRatingChange }) => {
+const MovieCard = ({ movie, showRating = false, onRatingChange, onWatchlistChange }) => {
   const { currentUser } = useAuth();
   const [userRating, setUserRating] = useState(movie.user_rating || 0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inWatchlist, setInWatchlist] = useState(movie.in_watchlist || false);
+  const [watchlistId, setWatchlistId] = useState(movie.watchlist_id || null);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [watchlistError, setWatchlistError] = useState(null);
   
   // Extract release year from date
   const releaseYear = movie.release_date 
@@ -51,6 +56,56 @@ const MovieCard = ({ movie, showRating = false, onRatingChange }) => {
       fetchUserRating();
     }
   }, [movie.id, currentUser, showRating, movie.user_rating]);
+
+  // Check if the movie is in the user's watchlist
+  useEffect(() => {
+    const checkWatchlist = async () => {
+      if (!currentUser) return;
+      
+      try {
+        const timestamp = Date.now();
+        const response = await fetch(`/api/watchlist/check/${movie.id}?_t=${timestamp}`, {
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        });
+        
+        if (response.ok) {
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            console.error('Non-JSON response when checking watchlist status');
+            return;
+          }
+          
+          const data = await response.json();
+          console.log(`Watchlist check for movie ${movie.id}:`, data);
+          
+          if (data.status === 'success') {
+            setInWatchlist(data.in_watchlist || false);
+            if (data.in_watchlist && data.watchlist_id) {
+              setWatchlistId(data.watchlist_id);
+            }
+          }
+        } else {
+          console.error(`Error checking watchlist status: ${response.status}`);
+        }
+      } catch (err) {
+        console.error(`Error checking watchlist status for movie ${movie.id}:`, err);
+      }
+    };
+    
+    // Set watchlist status from movie data if available
+    if (movie.in_watchlist !== undefined) {
+      setInWatchlist(movie.in_watchlist);
+      if (movie.watchlist_id) {
+        setWatchlistId(movie.watchlist_id);
+      }
+    } else if (currentUser) {
+      checkWatchlist();
+    }
+  }, [movie.id, currentUser, movie.in_watchlist, movie.watchlist_id]);
   
   // Handle rating
   const handleRate = async (value) => {
@@ -75,22 +130,159 @@ const MovieCard = ({ movie, showRating = false, onRatingChange }) => {
       setIsSubmitting(false);
     }
   };
+
+  // Toggle watchlist status
+  const handleToggleWatchlist = async (e) => {
+    e.preventDefault(); // Prevent navigation to movie page
+    e.stopPropagation(); // Stop event propagation
+    
+    if (!currentUser) {
+      alert("Please log in to add movies to your watchlist");
+      return;
+    }
+    
+    setWatchlistLoading(true);
+    setWatchlistError(null);
+    
+    try {
+      const timestamp = Date.now();
+      
+      if (inWatchlist && watchlistId) {
+        // Remove from watchlist
+        console.log(`Removing movie ${movie.id} from watchlist (watchlist_id: ${watchlistId})`);
+        
+        const response = await fetch(`/api/watchlist/${watchlistId}?_t=${timestamp}`, {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        });
+        
+        let responseData;
+        
+        // Check if the response is JSON
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          responseData = await response.json();
+        }
+        
+        if (response.ok) {
+          console.log('Movie removed from watchlist:', responseData);
+          setInWatchlist(false);
+          setWatchlistId(null);
+          
+          // Notify parent component if callback provided
+          if (onWatchlistChange) {
+            onWatchlistChange(movie.id, false, null);
+          }
+        } else {
+          throw new Error(responseData?.message || `Failed to remove from watchlist (${response.status})`);
+        }
+      } else {
+        // Add to watchlist
+        console.log(`Adding movie ${movie.id} to watchlist`);
+        
+        const response = await fetch(`/api/watchlist?_t=${timestamp}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          },
+          body: JSON.stringify({ 
+            movie_id: movie.id,
+            added_at: new Date().toISOString()
+          }),
+          credentials: 'include'
+        });
+        
+        let responseData;
+        
+        // Check if the response is JSON
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          responseData = await response.json();
+        } else {
+          console.error('Non-JSON response when adding to watchlist:', await response.text());
+          throw new Error('Received invalid response from server');
+        }
+        
+        if (response.ok && responseData.status === 'success') {
+          console.log('Movie added to watchlist:', responseData);
+          setInWatchlist(true);
+          setWatchlistId(responseData.watchlist_id);
+          
+          // Notify parent component if callback provided
+          if (onWatchlistChange) {
+            onWatchlistChange(movie.id, true, responseData.watchlist_id);
+          }
+        } else {
+          throw new Error(responseData?.message || `Failed to add to watchlist (${response.status})`);
+        }
+      }
+    } catch (err) {
+      console.error('Error updating watchlist:', err);
+      setWatchlistError(err.message || 'Failed to update watchlist');
+      
+      // Show error message briefly
+      if (err.message) {
+        const errorMessage = err.message.includes('already in your watchlist') 
+          ? 'Already in watchlist'
+          : 'Error updating watchlist';
+        
+        alert(errorMessage);
+      }
+    } finally {
+      setWatchlistLoading(false);
+    }
+  };
   
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden transition-transform duration-200 hover:scale-105 h-full">
-      <Link to={`/movies/${movie.id}`}>
-        {movie.poster_path ? (
-          <img 
-            src={movie.poster_path} 
-            alt={movie.title} 
-            className="w-full h-64 object-cover"
-          />
-        ) : (
-          <div className="w-full h-64 bg-gray-200 flex items-center justify-center">
-            <span className="text-gray-500">No Image</span>
-          </div>
+      <div className="relative">
+        <Link to={`/movies/${movie.id}`}>
+          {movie.poster_path ? (
+            <img 
+              src={movie.poster_path} 
+              alt={movie.title} 
+              className="w-full h-64 object-cover"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = "/placeholder-poster.jpg";
+              }}
+            />
+          ) : (
+            <div className="w-full h-64 bg-gray-200 flex items-center justify-center">
+              <span className="text-gray-500">No Image</span>
+            </div>
+          )}
+        </Link>
+        
+        {/* Watchlist Button */}
+        {currentUser && (
+          <button
+            onClick={handleToggleWatchlist}
+            disabled={watchlistLoading}
+            className={`absolute top-2 right-2 p-2 rounded-full ${
+              inWatchlist 
+                ? 'bg-blue-500 text-white' 
+                : 'bg-gray-800 bg-opacity-70 text-white hover:bg-blue-500'
+            } transition-colors duration-200 shadow-md`}
+            title={inWatchlist ? "Remove from watchlist" : "Add to watchlist"}
+          >
+            {watchlistLoading ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <FontAwesomeIcon 
+                icon={inWatchlist ? fasBookmark : farBookmark} 
+                className={`h-4 w-4 ${inWatchlist ? 'animate-pulse' : ''}`}
+              />
+            )}
+          </button>
         )}
-      </Link>
+      </div>
       
       <div className="p-4">
         <Link 

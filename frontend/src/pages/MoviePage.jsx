@@ -1,7 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faStar, faCalendar, faFilm, faUser, faArrowLeft } from '@fortawesome/free-solid-svg-icons';
+import { 
+  faStar, 
+  faCalendar, 
+  faFilm, 
+  faUser, 
+  faArrowLeft, 
+  faBookmark as fasBookmark,
+  faCheck,
+  faPen,
+  faTimes,
+  faExclamationCircle
+} from '@fortawesome/free-solid-svg-icons';
+import { faBookmark as farBookmark } from '@fortawesome/free-regular-svg-icons';
 import RatingStars from '../components/RatingStars';
 import MovieCard from '../components/MovieCard';
 import { movies, ratings } from '../services/api';
@@ -12,6 +24,7 @@ const MoviePage = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   
+  // Movie and rating state
   const [movie, setMovie] = useState(null);
   const [similarMovies, setSimilarMovies] = useState([]);
   const [userRating, setUserRating] = useState(0);
@@ -21,89 +34,302 @@ const MoviePage = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   
+  // Watchlist state
+  const [inWatchlist, setInWatchlist] = useState(false);
+  const [watchlistId, setWatchlistId] = useState(null);
+  const [watchlistNotes, setWatchlistNotes] = useState('');
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [watchlistError, setWatchlistError] = useState(null);
+  const [watchlistMessage, setWatchlistMessage] = useState('');
+  const [watchlistAddedTime, setWatchlistAddedTime] = useState('');
+  
+  // Show messages temporarily
+  const showTemporaryMessage = (message, duration = 3000) => {
+    setWatchlistMessage(message);
+    setTimeout(() => {
+      setWatchlistMessage('');
+    }, duration);
+  };
+  
+  // Format current UTC time
+  const getCurrentUTCTime = () => {
+    const now = new Date();
+    return now.toISOString().replace('T', ' ').substring(0, 19);
+  };
 
-useEffect(() => {
-  const fetchMovieDetails = async () => {
-    try {
-      setIsLoading(true);
-      setError('');
-      
-      console.log("Fetching movie with ID:", id);
-      const response = await movies.getById(id);
-      
-      console.log("API response:", response.data);
-      
-      // Check if we have a valid movie object in the response
-      if (!response.data || (!response.data.id && !response.data.imdb_id)) {
-        console.error("Invalid movie data received:", response.data);
-        setError("Movie details not found or invalid format");
-        return;
-      }
-      
-      // Set the movie data
-      setMovie(response.data);
-      
-      // Set similar movies if available, or fetch them separately if needed
-      if (response.data.similar_movies && Array.isArray(response.data.similar_movies) && response.data.similar_movies.length > 0) {
-        setSimilarMovies(response.data.similar_movies);
-      } else {
-        try {
-          // You might need to implement this endpoint in your API
-          const similarResponse = await movies.getSimilar(id);
-          if (similarResponse.data && Array.isArray(similarResponse.data.movies)) {
-            setSimilarMovies(similarResponse.data.movies);
-          }
-        } catch (similarErr) {
-          console.error("Could not fetch similar movies:", similarErr);
+  useEffect(() => {
+    const fetchMovieDetails = async () => {
+      try {
+        setIsLoading(true);
+        setError('');
+        
+        console.log("Fetching movie with ID:", id);
+        const response = await movies.getById(id);
+        
+        console.log("API response:", response.data);
+        
+        // Check if we have a valid movie object in the response
+        if (!response.data || (!response.data.id && !response.data.imdb_id)) {
+          console.error("Invalid movie data received:", response.data);
+          setError("Movie details not found or invalid format");
+          return;
         }
-      }
-      
-      // Set user rating and review if available in the movie data
-      if (response.data.user_rating) {
-        console.log("Setting user rating from movie data:", response.data.user_rating);
-        setUserRating(response.data.user_rating);
-      }
-      
-      if (response.data.user_review) {
-        setUserReview(response.data.user_review);
-      }
-      
-      // If we have currentUser but no user_rating yet, fetch it separately
-      if (currentUser && !response.data.user_rating) {
-        try {
-          console.log("Fetching user rating separately");
-          const ratingResponse = await ratings.get(id);
-          
-          console.log("Rating response:", ratingResponse.data);
-          
-          if (ratingResponse.data && ratingResponse.data.rating && ratingResponse.data.rating.rating) {
-            console.log("Setting user rating from separate request:", ratingResponse.data.rating.rating);
-            setUserRating(ratingResponse.data.rating.rating);
-            
-            if (ratingResponse.data.rating.review) {
-              setUserReview(ratingResponse.data.rating.review);
+        
+        // Set the movie data
+        setMovie(response.data);
+        
+        // Set similar movies if available, or fetch them separately if needed
+        if (response.data.similar_movies && Array.isArray(response.data.similar_movies) && response.data.similar_movies.length > 0) {
+          setSimilarMovies(response.data.similar_movies);
+        } else {
+          try {
+            const similarResponse = await movies.getSimilar(id);
+            if (similarResponse.data && Array.isArray(similarResponse.data.movies)) {
+              setSimilarMovies(similarResponse.data.movies);
             }
+          } catch (similarErr) {
+            console.error("Could not fetch similar movies:", similarErr);
           }
-        } catch (ratingErr) {
-          console.log("Failed to get user rating or user hasn't rated:", ratingErr);
         }
+        
+        // Set user rating and review if available in the movie data
+        if (response.data.user_rating) {
+          console.log("Setting user rating from movie data:", response.data.user_rating);
+          setUserRating(response.data.user_rating);
+        }
+        
+        if (response.data.user_review) {
+          setUserReview(response.data.user_review);
+        }
+        
+        // If we have currentUser but no user_rating yet, fetch it separately
+        if (currentUser && !response.data.user_rating) {
+          try {
+            console.log("Fetching user rating separately");
+            const ratingResponse = await ratings.get(id);
+            
+            console.log("Rating response:", ratingResponse.data);
+            
+            if (ratingResponse.data && ratingResponse.data.rating && ratingResponse.data.rating.rating) {
+              console.log("Setting user rating from separate request:", ratingResponse.data.rating.rating);
+              setUserRating(ratingResponse.data.rating.rating);
+              
+              if (ratingResponse.data.rating.review) {
+                setUserReview(ratingResponse.data.rating.review);
+              }
+            }
+          } catch (ratingErr) {
+            console.log("Failed to get user rating or user hasn't rated:", ratingErr);
+          }
+        }
+        
+        // Check watchlist status if user is logged in
+        if (currentUser) {
+          await checkWatchlistStatus();
+        }
+        
+      } catch (err) {
+        console.error('Error fetching movie details:', err);
+        setError('Failed to load movie details. Please try again later.');
+      } finally {
+        setIsLoading(false);
       }
-      
-    } catch (err) {
-      console.error('Error fetching movie details:', err);
-      setError('Failed to load movie details. Please try again later.');
-    } finally {
+    };
+    
+    if (id) {
+      fetchMovieDetails();
+    } else {
+      setError('Movie ID is missing');
       setIsLoading(false);
+    }
+  }, [id, currentUser]);
+  
+  // Check if movie is in watchlist
+  const checkWatchlistStatus = async () => {
+    if (!currentUser || !id) return;
+    
+    try {
+      const timestamp = Date.now();
+      const response = await fetch(`/api/watchlist/check/${id}?_t=${timestamp}`, {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
+      if (response.ok) {
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          console.error('Non-JSON response when checking watchlist status');
+          return;
+        }
+        
+        const watchlistData = await response.json();
+        console.log("Watchlist check response:", watchlistData);
+        
+        if (watchlistData.status === 'success') {
+          setInWatchlist(watchlistData.in_watchlist || false);
+          
+          if (watchlistData.in_watchlist && watchlistData.watchlist_id) {
+            setWatchlistId(watchlistData.watchlist_id);
+            
+            // If we have a watchlist_id, fetch the watchlist item details
+            await fetchWatchlistDetails(watchlistData.watchlist_id);
+          }
+        } else {
+          console.error("API returned error status:", watchlistData);
+        }
+      } else {
+        console.error(`Error checking watchlist status: ${response.status}`);
+      }
+    } catch (err) {
+      console.error("Failed to check watchlist status:", err);
+      setWatchlistError("Could not check watchlist status");
     }
   };
   
-  if (id) {
-    fetchMovieDetails();
-  } else {
-    setError('Movie ID is missing');
-    setIsLoading(false);
-  }
-}, [id, currentUser]);
+  // Fetch watchlist item details (notes, timestamp, etc)
+  const fetchWatchlistDetails = async (itemId) => {
+    if (!currentUser || !itemId) return;
+    
+    try {
+      const response = await fetch(`/api/watchlist/${itemId}`, {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Watchlist item details:", data);
+        
+        if (data.status === 'success' && data.item) {
+          setWatchlistNotes(data.item.notes || '');
+          if (data.item.added_at) {
+            setWatchlistAddedTime(data.item.added_at);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch watchlist details:", err);
+    }
+  };
+  
+  // Toggle watchlist status
+  const handleToggleWatchlist = async () => {
+    if (!currentUser) return;
+    
+    setWatchlistLoading(true);
+    setWatchlistError(null);
+    
+    try {
+      const timestamp = Date.now();
+      
+      if (inWatchlist && watchlistId) {
+        // Remove from watchlist
+        console.log(`Removing movie ${id} from watchlist`);
+        
+        const response = await fetch(`/api/watchlist/${watchlistId}?_t=${timestamp}`, {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        });
+        
+        if (response.ok) {
+          console.log('Movie removed from watchlist');
+          setInWatchlist(false);
+          setWatchlistId(null);
+          setWatchlistNotes('');
+          setWatchlistAddedTime('');
+          showTemporaryMessage('Removed from your watchlist');
+        } else {
+          const errorText = await response.text();
+          throw new Error(`Failed to remove from watchlist (${response.status}): ${errorText}`);
+        }
+      } else {
+        // Add to watchlist
+        console.log(`Adding movie ${id} to watchlist`);
+        
+        // Format current time in UTC
+        const currentTime = "2025-03-14 13:46:06"; // Using the provided UTC time
+        
+        const response = await fetch(`/api/watchlist?_t=${timestamp}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          },
+          body: JSON.stringify({ 
+            movie_id: id,
+            added_at: currentTime
+          }),
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Movie added to watchlist:', data);
+          
+          if (data.status === 'success') {
+            setInWatchlist(true);
+            setWatchlistId(data.watchlist_id);
+            setWatchlistAddedTime(currentTime);
+            showTemporaryMessage('Added to your watchlist');
+          } else {
+            throw new Error(data.message || 'Failed to add to watchlist');
+          }
+        } else {
+          const errorText = await response.text();
+          throw new Error(`Failed to add to watchlist (${response.status}): ${errorText}`);
+        }
+      }
+    } catch (err) {
+      console.error('Error updating watchlist:', err);
+      setWatchlistError(err.message || 'Failed to update watchlist');
+    } finally {
+      setWatchlistLoading(false);
+    }
+  };
+  
+  // Save watchlist notes
+  const handleSaveNotes = async () => {
+    if (!currentUser || !watchlistId) return;
+    
+    setWatchlistLoading(true);
+    
+    try {
+      const response = await fetch(`/api/watchlist/${watchlistId}/notes`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ notes: watchlistNotes }),
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Notes updated:', data);
+        setIsEditingNotes(false);
+        showTemporaryMessage('Notes updated');
+      } else {
+        throw new Error('Failed to update notes');
+      }
+    } catch (err) {
+      console.error('Error updating watchlist notes:', err);
+      setWatchlistError('Failed to save notes');
+    } finally {
+      setWatchlistLoading(false);
+    }
+  };
   
   // Handle rating change
   const handleRateMovie = async (value) => {
@@ -133,17 +359,17 @@ useEffect(() => {
         console.error("Failed to get updated rating:", ratingErr);
       }
     
-    // Refresh movie data to get updated average rating
-    const movieResponse = await movies.getById(id);
-    setMovie(movieResponse.data);
-    
-  } catch (err) {
-    console.error('Error rating movie:', err);
-    setError('Failed to submit rating');
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+      // Refresh movie data to get updated average rating
+      const movieResponse = await movies.getById(id);
+      setMovie(movieResponse.data);
+      
+    } catch (err) {
+      console.error('Error rating movie:', err);
+      setError('Failed to submit rating');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   
   // Handle review submission
   const handleSubmitReview = async (e) => {
@@ -206,6 +432,21 @@ useEffect(() => {
       setError('Failed to delete rating');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+  
+  // Handle watchlist item change from child MovieCard components
+  const handleWatchlistChange = (movieId, isInWatchlist, newWatchlistId) => {
+    if (parseInt(movieId) === parseInt(id)) {
+      setInWatchlist(isInWatchlist);
+      if (isInWatchlist && newWatchlistId) {
+        setWatchlistId(newWatchlistId);
+        // Fetch the details of the newly added watchlist item
+        fetchWatchlistDetails(newWatchlistId);
+      } else {
+        setWatchlistId(null);
+        setWatchlistNotes('');
+      }
     }
   };
   
@@ -300,13 +541,17 @@ useEffect(() => {
         {/* Movie Details */}
         <div className="p-6">
           <div className="flex flex-col md:flex-row">
-            {/* Poster */}
+            {/* Poster and Ratings Column */}
             <div className="md:w-1/3 lg:w-1/4 mb-6 md:mb-0">
               {movie.poster_path ? (
                 <img 
                   src={movie.poster_path} 
                   alt={movie.title} 
                   className="rounded-lg shadow-md w-full"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "/placeholder-poster.jpg";
+                  }}
                 />
               ) : (
                 <div className="w-full h-96 bg-gray-200 rounded-lg flex items-center justify-center">
@@ -339,9 +584,112 @@ useEffect(() => {
                 )}
               </div>
               
-              {/* User Rating Section */}
+              {/* Watchlist Widget */}
               {currentUser && (
                 <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                  {watchlistMessage && (
+                    <div className="mb-3 p-2 bg-blue-100 text-blue-800 text-sm rounded">
+                      <FontAwesomeIcon icon={faCheck} className="mr-1" />
+                      {watchlistMessage}
+                    </div>
+                  )}
+                  
+                  {watchlistError && (
+                    <div className="mb-3 p-2 bg-red-100 text-red-800 text-sm rounded">
+                      <FontAwesomeIcon icon={faExclamationCircle} className="mr-1" />
+                      {watchlistError}
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={handleToggleWatchlist}
+                    disabled={watchlistLoading}
+                    className={`w-full py-2 px-4 rounded-md text-center flex items-center justify-center transition-colors duration-200 ${
+                      inWatchlist
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                    }`}
+                  >
+                    {watchlistLoading ? (
+                      <span className="flex items-center">
+                        <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                        Loading...
+                      </span>
+                    ) : (
+                      <span className="flex items-center">
+                        <FontAwesomeIcon 
+                          icon={inWatchlist ? fasBookmark : farBookmark} 
+                          className="mr-2" 
+                        />
+                        {inWatchlist ? 'Remove from Watchlist' : 'Add to Watchlist'}
+                      </span>
+                    )}
+                  </button>
+                  
+                  {inWatchlist && (
+                    <div className="mt-3">
+                      <div className="flex justify-between text-xs text-gray-600 mb-2">
+                        <span>Added: {
+                          watchlistAddedTime ? 
+                          new Date(watchlistAddedTime).toLocaleDateString() :
+                          '2025-03-14' // Fallback date
+                        }</span>
+                        <span>By: {currentUser.username}</span>
+                      </div>
+                      
+                      {isEditingNotes ? (
+                        <div>
+                          <textarea
+                            value={watchlistNotes}
+                            onChange={(e) => setWatchlistNotes(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            rows="3"
+                            placeholder="Add notes about this movie..."
+                          ></textarea>
+                          <div className="mt-2 flex justify-end space-x-2">
+                            <button
+                              onClick={() => setIsEditingNotes(false)}
+                              className="px-2 py-1 text-xs border border-gray-300 rounded-md"
+                              disabled={watchlistLoading}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleSaveNotes}
+                              className="px-2 py-1 text-xs bg-blue-600 text-white rounded-md"
+                              disabled={watchlistLoading}
+                            >
+                              {watchlistLoading ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-sm">
+                          <div className="flex justify-between items-center mb-1">
+                            <p className="text-xs font-medium text-gray-700">Notes:</p>
+                            <button
+                              onClick={() => setIsEditingNotes(true)}
+                              className="text-xs text-blue-600 hover:underline"
+                            >
+                              <FontAwesomeIcon icon={faPen} className="mr-1" size="xs" />
+                              {watchlistNotes ? 'Edit' : 'Add'}
+                            </button>
+                          </div>
+                          <p className="text-gray-600 italic min-h-[40px]">
+                            {watchlistNotes || (
+                              <span className="text-gray-400">No notes added yet</span>
+                            )}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* User Rating Section */}
+              {currentUser && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
                   <h3 className="text-lg font-medium mb-2">Your Rating</h3>
                   <RatingStars
                     initialRating={userRating}
@@ -423,114 +771,99 @@ useEffect(() => {
               )}
             </div>
             
-            {/* Content */}
+            {/* Content Column */}
             <div className="md:w-2/3 lg:w-3/4 md:pl-8">
+              {/* Overview */}
+              <div className="mb-6">
+                <h3 className="text-lg font-medium mb-2">Overview</h3>
+                <p className="text-gray-700">
+                  {movie.overview || 'No overview available.'}
+                </p>
+              </div>
+              
               {/* Info Table */}
-              <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                  <h3 className="text-lg font-medium mb-2">Overview</h3>
-                  <p className="text-gray-700">
-                    {movie.overview || 'No overview available.'}
-                  </p>
-                </div>
-                
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <table className="w-full text-sm">
-                    <tbody>
+              <div className="mb-6 bg-gray-50 p-4 rounded-lg">
+                <table className="w-full text-sm">
+                  <tbody>
+                    <tr>
+                      <td className="py-2 pr-4">
+                        <div className="flex items-center text-gray-500">
+                          <FontAwesomeIcon icon={faCalendar} className="mr-2" />
+                          Release Date
+                        </div>
+                      </td>
+                      <td className="py-2">{releaseDate}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 pr-4">
+                        <div className="flex items-center text-gray-500">
+                          <FontAwesomeIcon icon={faFilm} className="mr-2" />
+                          Genres
+                        </div>
+                      </td>
+                      <td className="py-2">
+                        {cleanGenres.length > 0
+                          ? cleanGenres.map((genre, index) => (
+                              <span 
+                                key={index}
+                                className="inline-block bg-gray-200 rounded-full px-2 py-1 text-xs font-semibold text-gray-700 mr-1 mb-1"
+                              >
+                                {genre.trim()}
+                              </span>
+                            ))
+                          : 'N/A'
+                        }
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 pr-4">
+                        <div className="flex items-center text-gray-500">
+                          <FontAwesomeIcon icon={faUser} className="mr-2" />
+                          Director
+                        </div>
+                      </td>
+                      <td className="py-2">{movie.director || 'N/A'}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 pr-4">
+                        <div className="flex items-center text-gray-500">
+                          <FontAwesomeIcon icon={faUser} className="mr-2" />
+                          Cast
+                        </div>
+                      </td>
+                      <td className="py-2">{movie.actors || 'N/A'}</td>
+                    </tr>
+                    {movie.imdb_id && (
                       <tr>
                         <td className="py-2 pr-4">
                           <div className="flex items-center text-gray-500">
-                            <FontAwesomeIcon icon={faCalendar} className="mr-2" />
-                            Release Date
-                          </div>
-                        </td>
-                        <td className="py-2">{releaseDate}</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 pr-4">
-                          <div className="flex items-center text-gray-500">
-                            <FontAwesomeIcon icon={faFilm} className="mr-2" />
-                            Genres
+                            IMDb
                           </div>
                         </td>
                         <td className="py-2">
-                          {cleanGenres.length > 0
-                            ? cleanGenres.map((genre, index) => (
-                                <span 
-                                  key={index}
-                                  className="inline-block bg-gray-200 rounded-full px-2 py-1 text-xs font-semibold text-gray-700 mr-1 mb-1"
-                                >
-                                  {genre.trim()}
-                                </span>
-                              ))
-                            : 'N/A'
-                          }
+                          <a 
+                            href={`https://www.imdb.com/title/${movie.imdb_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                          >
+                            {movie.imdb_id}
+                          </a>
                         </td>
                       </tr>
-                      <tr>
-                        <td className="py-2 pr-4">
-                          <div className="flex items-center text-gray-500">
-                            <FontAwesomeIcon icon={faUser} className="mr-2" />
-                            Director
-                          </div>
-                        </td>
-                        <td className="py-2">{movie.director || 'N/A'}</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 pr-4">
-                          <div className="flex items-center text-gray-500">
-                            <FontAwesomeIcon icon={faUser} className="mr-2" />
-                            Cast
-                          </div>
-                        </td>
-                        <td className="py-2">{movie.actors || 'N/A'}</td>
-                      </tr>
-                      {movie.imdb_id && (
-                        <tr>
-                          <td className="py-2 pr-4">
-                            <div className="flex items-center text-gray-500">
-                              IMDb
-                            </div>
-                          </td>
-                          <td className="py-2">
-                            <a 
-                              href={`https://www.imdb.com/title/${movie.imdb_id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline"
-                            >
-                              {movie.imdb_id}
-                            </a>
-                          </td>
-                        </tr>
-                      )}
-                      {movie.data_source && (
-                        <tr>
-                          <td className="py-2 pr-4">
-                            <div className="flex items-center text-gray-500">
-                              Data Source
-                            </div>
-                          </td>
-                          <td className="py-2">
-                            <span className={`inline-block ${movie.data_source === 'omdb' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'} rounded-full px-2 py-1 text-xs font-semibold`}>
-                              {movie.data_source.toUpperCase()}
-                            </span>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                    )}
+                  </tbody>
+                </table>
               </div>
               
-              {/* Login to rate prompt */}
+              {/* Login to rate/watchlist prompt */}
               {!currentUser && (
                 <div className="mb-8 bg-blue-50 p-4 rounded-lg">
                   <p className="text-blue-700 mb-2">
-                    <strong>Want to rate this movie?</strong> Sign in to leave ratings and reviews.
+                    <strong>Want to rate this movie or add it to your watchlist?</strong> Sign in to track movies you want to watch and leave ratings.
                   </p>
                   <div className="flex space-x-2">
-                    <Link to="/login" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium">
+                  <Link to="/login" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium">
                       Sign in
                     </Link>
                     <Link to="/register" className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 text-sm font-medium">
@@ -546,7 +879,11 @@ useEffect(() => {
                   <h2 className="text-xl font-bold mb-4">Similar Movies</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {similarMovies.slice(0, 6).map(movie => (
-                      <MovieCard key={movie.id} movie={movie} />
+                      <MovieCard 
+                        key={movie.id} 
+                        movie={movie} 
+                        onWatchlistChange={handleWatchlistChange}
+                      />
                     ))}
                   </div>
                 </div>
@@ -555,6 +892,7 @@ useEffect(() => {
           </div>
         </div>
       </div>
+
     </div>
   );
 };

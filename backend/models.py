@@ -67,8 +67,10 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Define relationship using back_populates to avoid duplicate backrefs.
+    # Define relationship using back_populates without adding backref in Rating
     ratings = db.relationship('Rating', back_populates='user', lazy=True, cascade="all, delete-orphan")
+    watchlist_items = db.relationship('Watchlist', back_populates='user', lazy=True, cascade="all, delete-orphan")
+
     
     def __repr__(self):
         return f'<User {self.username}>'
@@ -101,8 +103,10 @@ class Rating(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
-    user = db.relationship('User', backref=db.backref('ratings', lazy=True, cascade="all, delete-orphan"))
+    # Use back_populates to match the relationship defined in User
+    user = db.relationship('User', back_populates='ratings')
+    
+    # Keep the movie relationship as backref
     movie = db.relationship('Movie', backref=db.backref('ratings', lazy=True, cascade="all, delete-orphan"))
     
     def to_dict(self):
@@ -115,4 +119,33 @@ class Rating(db.Model):
             'review': self.review,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+    
+class Watchlist(db.Model):
+    """Watchlist model for users to save movies they want to watch later"""
+    __tablename__ = 'watchlists'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    movie_id = db.Column(db.Integer, db.ForeignKey('movies.id', ondelete='CASCADE'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    notes = db.Column(db.Text, nullable=True)  # Optional notes about why the user wants to watch this
+    
+    # Define relationships
+    user = db.relationship('User', back_populates='watchlist_items')
+    movie = db.relationship('Movie', backref=db.backref('watchlisted_by', lazy=True))
+    
+    # Each user can only have a movie in their watchlist once
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'movie_id', name='unique_user_movie_watchlist'),
+    )
+    
+    def to_dict(self):
+        """Convert watchlist item to dictionary"""
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'movie_id': self.movie_id,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'notes': self.notes
         }

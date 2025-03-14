@@ -144,7 +144,6 @@ export const movies = {
 };
 
 // Rating Services
-// Rating Services
 export const ratings = {
   add: (movieId, ratingValue, review = '') => {
     console.log(`Adding rating ${ratingValue} for movie ${movieId}`);
@@ -174,6 +173,44 @@ export const ratings = {
     api.get('/user/rated-movies', {
       params: { page, per_page: perPage }
     })
+};
+
+// Watchlist Services - Added by shreyaupretyy on 2025-03-14 14:33:18
+export const watchlist = {
+  // Get user's watchlist with pagination
+  getWatchlist: (page = 1, perPage = 12) => {
+    console.log(`Fetching watchlist page ${page} with ${perPage} items per page`);
+    return api.get('/watchlist', {
+      params: { page, per_page: perPage }
+    });
+  },
+  
+  // Add a movie to watchlist
+  addToWatchlist: (movieId, notes = '') => {
+    console.log(`Adding movie ${movieId} to watchlist`);
+    return api.post('/watchlist', { 
+      movie_id: movieId, 
+      notes: notes 
+    });
+  },
+  
+  // Remove a movie from watchlist
+  removeFromWatchlist: (watchlistId) => {
+    console.log(`Removing item ${watchlistId} from watchlist`);
+    return api.delete(`/watchlist/${watchlistId}`);
+  },
+  
+  // Update notes for a watchlist item
+  updateNotes: (watchlistId, notes) => {
+    console.log(`Updating notes for watchlist item ${watchlistId}`);
+    return api.put(`/watchlist/${watchlistId}/notes`, { notes });
+  },
+  
+  // Check if a movie is in the user's watchlist
+  checkMovieInWatchlist: (movieId) => {
+    console.log(`Checking if movie ${movieId} is in watchlist`);
+    return api.get(`/watchlist/check/${movieId}`);
+  }
 };
 
 // Recommendation Services
@@ -221,6 +258,7 @@ export default {
   movies,
   ratings,
   recommendations,
+  watchlist, // Add the new watchlist service
   health,
   retry,
   checkApiConnection

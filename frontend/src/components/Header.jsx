@@ -13,7 +13,8 @@ import {
   faUser,
   faHome,
   faChevronDown,
-  faCog
+  faCog,
+  faBookmark
 } from '@fortawesome/free-solid-svg-icons';
 
 const Header = () => {
@@ -155,6 +156,19 @@ const Header = () => {
                   >
                     <FontAwesomeIcon icon={faChartLine} className={`mr-2 ${isActivePath('/recommended') ? 'text-green-400' : ''}`} />
                     <span>For You</span>
+                  </Link>
+                )}
+
+                {currentUser && (
+                  <Link 
+                    to="/watchlist" 
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center
+                      ${isActivePath('/watchlist') 
+                        ? 'bg-gray-800 text-white' 
+                        : 'text-gray-200 hover:bg-gray-800 hover:text-white'}`}
+                  >
+                    <FontAwesomeIcon icon={faBookmark} className={`mr-2 ${isActivePath('/watchlist') ? 'text-blue-400' : ''}`} />
+                    <span>Watchlist</span>
                   </Link>
                 )}
               </div>
@@ -381,6 +395,20 @@ const Header = () => {
               >
                 <FontAwesomeIcon icon={faChartLine} className="mr-3" />
                 Recommendations
+              </Link>
+            )}
+            {currentUser && (
+              <Link 
+                to="/watchlist" 
+                className={`flex items-center px-3 py-2 rounded-md text-base font-medium ${
+                  isActivePath('/watchlist') 
+                    ? 'bg-gray-900 text-white' 
+                    : 'text-gray-200 hover:bg-gray-700 hover:text-white'
+                }`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <FontAwesomeIcon icon={faBookmark} className="mr-3" />
+                Watchlist
               </Link>
             )}
           </div>

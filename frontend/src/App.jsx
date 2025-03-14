@@ -13,6 +13,13 @@ import MoviePage from './pages/MoviePage';
 import MoviesPage from './pages/MoviesPage';
 import RecommendedMoviesPage from './pages/RecommendedMoviesPage';
 import SearchResultsPage from './pages/SearchResultsPage';
+import WatchlistPage from './pages/WatchlistPage';
+import SettingsPage from './pages/SettingsPage';
+import HelpCenterPage from './pages/HelpCenterPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsOfServicePage from './pages/TermsOfServicePage';
+import DataPolicyPage from './pages/DataPolicyPage';
+import CookiePolicyPage from './pages/CookiePolicyPage';
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -44,11 +51,26 @@ function AppContent() {
             <Route path="/search" element={<SearchPage />} />
             <Route path="/recommended" element={<RecommendedMoviesPage />} />
             <Route path="/movies" element={<SearchResultsPage />} />
+            <Route path="/watchlist" element={<WatchlistPage />} />
+            <Route path="/help" element={<HelpCenterPage />} />
+            <Route path="/privacy" element={<PrivacyPolicyPage />} />
+            <Route path="/terms" element={<TermsOfServicePage />} />
+            <Route path="/cookies" element={<CookiePolicyPage />} />
+
+            <Route path="/data-policy" element={<DataPolicyPage />} />
             <Route 
               path="/profile" 
               element={
                 <ProtectedRoute>
                   <ProfilePage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/settings" 
+              element={
+                <ProtectedRoute>
+                  <SettingsPage />
                 </ProtectedRoute>
               } 
             />
